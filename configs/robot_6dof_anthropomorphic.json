@@ -1,0 +1,109 @@
+{
+  "robot_name": "ARM-6DOF-Anthropomorphic",
+  "manufacturer": "ThirdParty-Robotics",
+  "dof": 6,
+  "expected_hz": 100.0,
+  "max_jitter_us": 500,
+  "joints": [
+    {
+      "name": "shoulder_pan",
+      "min_angle_rad": -3.1416,
+      "max_angle_rad": 3.1416,
+      "max_speed_rad_s": 3.14,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 100.0
+    },
+    {
+      "name": "shoulder_lift",
+      "min_angle_rad": -2.3562,
+      "max_angle_rad": 2.3562,
+      "max_speed_rad_s": 3.14,
+      "home_angle_rad": -1.5708,
+      "gear_ratio": 100.0
+    },
+    {
+      "name": "elbow",
+      "min_angle_rad": -2.3562,
+      "max_angle_rad": 2.3562,
+      "max_speed_rad_s": 3.14,
+      "home_angle_rad": 1.5708,
+      "gear_ratio": 80.0
+    },
+    {
+      "name": "wrist_1",
+      "min_angle_rad": -3.1416,
+      "max_angle_rad": 3.1416,
+      "max_speed_rad_s": 6.28,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 50.0
+    },
+    {
+      "name": "wrist_2",
+      "min_angle_rad": -3.1416,
+      "max_angle_rad": 3.1416,
+      "max_speed_rad_s": 6.28,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 50.0
+    },
+    {
+      "name": "wrist_3",
+      "min_angle_rad": -3.1416,
+      "max_angle_rad": 3.1416,
+      "max_speed_rad_s": 6.28,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 50.0
+    }
+  ],
+  "fieldbus": {
+    "protocol": "Serial",
+    "port": "COM3",
+    "baud_rate": 115200,
+    "data_bits": 8,
+    "parity": "None",
+    "stop_bits": 1
+  },
+  "kinematic_chain": [
+    {
+      "parent": "base",
+      "child": "shoulder_pan",
+      "translation_m": [0.0, 0.0, 0.15],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "shoulder_pan",
+      "child": "shoulder_lift",
+      "translation_m": [0.0, 0.0, 0.25],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "shoulder_lift",
+      "child": "elbow",
+      "translation_m": [0.0, 0.0, 0.30],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "elbow",
+      "child": "wrist_1",
+      "translation_m": [0.0, 0.0, 0.25],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "wrist_1",
+      "child": "wrist_2",
+      "translation_m": [0.0, 0.0, 0.1],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "wrist_2",
+      "child": "wrist_3",
+      "translation_m": [0.0, 0.0, 0.1],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "wrist_3",
+      "child": "end_effector",
+      "translation_m": [0.0, 0.0, 0.05],
+      "rotation_axis": [0.0, 0.0, 0.0]
+    }
+  ]
+}

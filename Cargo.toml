@@ -1,0 +1,19 @@
+[package]
+name = "SONNY"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[dependencies]
+# Runtime asincrono per la gestione dei thread real-time
+tokio = { version = "1.0", features = ["full"] }
+
+# Protocollo di rete unificato a bassissima latenza
+zenoh = { version = "1.0" }
+
+# Parser leggero per i messaggi del ROS2 Bridge (simulato o formati standard)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+
+# Comunicazione seriale RS-232/485 per fieldbus industriali (Modbus RTU, CAN)
+tokio-serial = { version = "5.4" }

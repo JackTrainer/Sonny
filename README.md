@@ -30,6 +30,9 @@ The current Silicon Valley paradigm (led by companies like **Physical Intelligen
 
 Every robotics engineer knows the pain of maintaining a production-grade ROS 2 stack. SONNY OS was engineered from day one to architecturally eliminate these legacy bottlenecks:
 
+<img width="1413" height="481" alt="image" src="https://github.com/user-attachments/assets/f16f5232-9c4b-4e22-b87a-816ff4224767" />
+
+
 ### 1. Zero Dependency Purgatory (Single-Binary Native Execution)
 * **The ROS 2 Nightmare:** Deploying ROS 2 requires a highly specific Ubuntu flavor, complex environmental sourcing, CMake synchronization, Python runtime dependencies, and an endless cycle of compilation crashes.
 * **The SONNY OS Fix:** SONNY OS compiles down to a single, hyper-optimized, standalone native binary. With zero garbage collection and no external runtime requirements, you type `cargo run` and it executes flawlessly across any architecture—be it a Windows workstation, an x86 Linux server, or an ultra-low-power ARM-based NVIDIA Jetson edge node. 

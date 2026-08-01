@@ -1,5 +1,5 @@
-# Sonny
-<img width="1344" height="768" alt="image" src="https://github.com/user-attachments/assets/be4c82ec-8e35-4655-830f-7a30a9eb3620" />
+
+
 
 
 # 🪐 SONNY OS — Core Minimal Microkernel

@@ -93,25 +93,93 @@ SONNY/
 
 ---
 
-## 🛠️ Getting Started via Terminal
+## 🛠️ Getting Started: Run SONNY on a Real Robot
 
 ### Prerequisites
-Ensure you have the latest stable Rust toolchain and Cargo installed on your edge device or laptop.
+* **Rust stable** toolchain on the edge device that talks to the robot (laptop, Jetson, Raspberry Pi) or directly on the robot's Linux controller.
+* The robot controller reachable on the network (or a serial cable plugged in).
+* A **Linux** host for the real-time thread isolation (`SCHED_FIFO` + CPU affinity). On Windows/macOS SONNY still runs, but the real-time pinning is a no-op.
 
-### 1. Clone and Compile the Microkernel
-Clone this repository and compile the native core in maximum optimization mode:
+### 1. Point the Config at Your Robot Controller
+
+Every robot profile lives in `configs/`. Open the JSON of your arm and set the `fieldbus` block so it matches your physical controller — the IP/port below are placeholders:
+
+```json
+"fieldbus": {
+  "protocol": "Tcp",
+  "remote_addr": "192.168.1.2:7911",
+  "frame_timeout_ms": 100,
+  "reconnect_delay_ms": 2000
+}
+```
+
+The `brand` is auto-detected from `manufacturer` (or forced with `brand`) and selects the native codec: `KUKA` (Ethernet KRL / TCP 7911), `UNIVERSAL-ROBOTS` (RT Client / TCP 30003), `COMAU` (PDL2 / TCP 6000), `FRANKA-EMIKA` (FCI / UDP 30401), `AMR` (ROS2 Twist-Odom), `GENERIC` (fixed f32 binary).
+
+### 2. Compile the Release Binary
+
 ```bash
-git clone https://github.com
-cd SONNY
+git clone https://github.com/JackTrainer/Sonny.git
+cd Sonny
 cargo build --release
 ```
 
-### 2. Run the Diagnostic Simulator
-Execute the bootloader with un-captured stdout logs to visualize the real-time 100Hz memory bus and terminal graphics dashboard:
+### 3. Run It on the Real Robot
+
+Pass the config path as the first argument:
+
 ```bash
-cargo run --release -- --nocapture
+./target/release/SONNY configs/kuka_kr6_r900.json
 ```
-The microkernel will spin up an isolated, virtual asynchronous runtime instance, self-correcting micro-timing delays and initializing local Zenoh streaming nodes automatically.
+
+(or without building separately: `cargo run --release -- configs/kuka_kr6_r900.json`).
+
+You should see `[BOOT] Sistema pronto su hardware: KUKA-KR6-R900 (profilo: KUKA)` and the live 100 Hz terminal dashboard. `Ctrl+C` triggers a clean shutdown with E-stop/watchdog release.
+
+### 4. Real-Time Priority (Recommended on the Edge Node)
+
+At startup SONNY pins the control thread to a dedicated core and asks the kernel for `SCHED_FIFO` real-time priority. That requires `CAP_SYS_NICE` — grant it once to the binary so it can elevate priority without running as root:
+
+```bash
+sudo setcap cap_sys_nice=ep target/release/SONNY
+./target/release/SONNY configs/kuka_kr6_r900.json
+```
+
+Without the capability the kernel refuses `SCHED_FIFO` and SONNY automatically falls back to niceness `-20` (log line `[WARN - RT] SCHED_FIFO rifiutata (...): fallback niceness -20 attivo`).
+
+### 5. Quick Starts per Transport
+
+**Ethernet robot (TCP)** — KUKA, Comau, Universal Robots:
+```bash
+./target/release/SONNY configs/comau_racer5.json
+```
+
+**Franka Emika (UDP FCI, 1 kHz)**:
+```bash
+./target/release/SONNY configs/franka_emika_panda.json
+```
+
+**Serial fieldbus (Modbus RTU / CAN via RS-232/485)** — set the port in the JSON, or override everything via environment:
+```bash
+ROBOT_SERIAL_PORT=/dev/ttyUSB0 \
+ROBOT_SERIAL_BAUD=115200 \
+ROBOT_NAME=MyArm \
+ROBOT_DOF=6 \
+./target/release/SONNY
+```
+
+**UDP robot via environment** (bind address + robot endpoint):
+```bash
+ROBOT_UDP_BIND=0.0.0.0:0 \
+ROBOT_UDP_REMOTE=192.168.1.2:30401 \
+./target/release/SONNY
+```
+
+**Remote telemetry across machines**: telemetry and commands travel over Zenoh on `alpha/telemetry/{id}` / `alpha/cmd/{id}`. To stream to another PC, point the node at your Zenoh router with a config file:
+```bash
+ZENOH_CONFIG=zenoh/router.json ./target/release/SONNY configs/universal_robots_ur5e.json
+```
+
+> ⚠️ Safety: the Hard-Watchdog arms on boot and stops the actuators if the control heartbeat misses its deadline. Always test in a fenced, speed-limited environment with the E-stop reachable before commanding real motion.
 
 ---
 

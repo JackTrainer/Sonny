@@ -1,0 +1,108 @@
+{
+  "robot_name": "UR5e",
+  "manufacturer": "Universal Robots",
+  "brand": "UNIVERSAL-ROBOTS",
+  "dof": 6,
+  "expected_hz": 125.0,
+  "max_jitter_us": 500,
+  "joints": [
+    {
+      "name": "shoulder_pan",
+      "min_angle_rad": -6.2832,
+      "max_angle_rad": 6.2832,
+      "max_speed_rad_s": 3.1416,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 101.0
+    },
+    {
+      "name": "shoulder_lift",
+      "min_angle_rad": -6.2832,
+      "max_angle_rad": 6.2832,
+      "max_speed_rad_s": 3.1416,
+      "home_angle_rad": -1.5708,
+      "gear_ratio": 101.0
+    },
+    {
+      "name": "elbow",
+      "min_angle_rad": -6.2832,
+      "max_angle_rad": 6.2832,
+      "max_speed_rad_s": 3.1416,
+      "home_angle_rad": 1.5708,
+      "gear_ratio": 101.0
+    },
+    {
+      "name": "wrist_1",
+      "min_angle_rad": -6.2832,
+      "max_angle_rad": 6.2832,
+      "max_speed_rad_s": 6.2832,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 51.0
+    },
+    {
+      "name": "wrist_2",
+      "min_angle_rad": -6.2832,
+      "max_angle_rad": 6.2832,
+      "max_speed_rad_s": 6.2832,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 51.0
+    },
+    {
+      "name": "wrist_3",
+      "min_angle_rad": -6.2832,
+      "max_angle_rad": 6.2832,
+      "max_speed_rad_s": 6.2832,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 51.0
+    }
+  ],
+  "fieldbus": {
+    "protocol": "Tcp",
+    "remote_addr": "192.168.1.30:30003",
+    "frame_timeout_ms": 8,
+    "reconnect_delay_ms": 2000
+  },
+  "kinematic_chain": [
+    {
+      "parent": "base",
+      "child": "shoulder_pan",
+      "translation_m": [0.0, 0.0, 0.1625],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "shoulder_pan",
+      "child": "shoulder_lift",
+      "translation_m": [0.0, 0.0, 0.0],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "shoulder_lift",
+      "child": "elbow",
+      "translation_m": [0.0, 0.0, 0.425],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "elbow",
+      "child": "wrist_1",
+      "translation_m": [0.0, 0.0, 0.392],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "wrist_1",
+      "child": "wrist_2",
+      "translation_m": [0.0, 0.0, 0.094],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "wrist_2",
+      "child": "wrist_3",
+      "translation_m": [0.0, 0.0, 0.082],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "wrist_3",
+      "child": "end_effector",
+      "translation_m": [0.0, 0.0, 0.0],
+      "rotation_axis": [0.0, 0.0, 0.0]
+    }
+  ]
+}

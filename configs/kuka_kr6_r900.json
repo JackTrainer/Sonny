@@ -1,0 +1,108 @@
+{
+  "robot_name": "KUKA-KR6-R900",
+  "manufacturer": "KUKA",
+  "brand": "KUKA",
+  "dof": 6,
+  "expected_hz": 100.0,
+  "max_jitter_us": 500,
+  "joints": [
+    {
+      "name": "a1",
+      "min_angle_rad": -3.1416,
+      "max_angle_rad": 3.1416,
+      "max_speed_rad_s": 2.6179,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 121.0
+    },
+    {
+      "name": "a2",
+      "min_angle_rad": -0.5236,
+      "max_angle_rad": 2.9671,
+      "max_speed_rad_s": 2.0944,
+      "home_angle_rad": -1.5708,
+      "gear_ratio": 121.0
+    },
+    {
+      "name": "a3",
+      "min_angle_rad": -1.9199,
+      "max_angle_rad": 2.9671,
+      "max_speed_rad_s": 2.9671,
+      "home_angle_rad": 1.5708,
+      "gear_ratio": 121.0
+    },
+    {
+      "name": "a4",
+      "min_angle_rad": -3.1416,
+      "max_angle_rad": 3.1416,
+      "max_speed_rad_s": 5.2359,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 81.0
+    },
+    {
+      "name": "a5",
+      "min_angle_rad": -2.1817,
+      "max_angle_rad": 2.1817,
+      "max_speed_rad_s": 5.2359,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 81.0
+    },
+    {
+      "name": "a6",
+      "min_angle_rad": -3.1416,
+      "max_angle_rad": 3.1416,
+      "max_speed_rad_s": 8.6394,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 51.0
+    }
+  ],
+  "fieldbus": {
+    "protocol": "Tcp",
+    "remote_addr": "192.168.1.2:7911",
+    "frame_timeout_ms": 100,
+    "reconnect_delay_ms": 2000
+  },
+  "kinematic_chain": [
+    {
+      "parent": "base",
+      "child": "a1",
+      "translation_m": [0.0, 0.0, 0.4],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "a1",
+      "child": "a2",
+      "translation_m": [0.0, 0.0, 0.25],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "a2",
+      "child": "a3",
+      "translation_m": [0.0, 0.0, 0.4],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "a3",
+      "child": "a4",
+      "translation_m": [0.0, 0.0, 0.25],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "a4",
+      "child": "a5",
+      "translation_m": [0.0, 0.0, 0.0],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "a5",
+      "child": "a6",
+      "translation_m": [0.0, 0.0, 0.1],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "a6",
+      "child": "end_effector",
+      "translation_m": [0.0, 0.0, 0.05],
+      "rotation_axis": [0.0, 0.0, 0.0]
+    }
+  ]
+}

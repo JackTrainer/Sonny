@@ -17,3 +17,24 @@ serde_json = { version = "1.0" }
 
 # Comunicazione seriale RS-232/485 per fieldbus industriali (Modbus RTU, CAN)
 tokio-serial = { version = "5.4" }
+
+# FFI verso le librerie di sistema per thread affinity e priorità real-time
+# (sched_setaffinity, sched_setscheduler/SCHED_FIFO, setpriority)
+libc = "0.2"
+
+# ---------------------------------------------------------------------------
+# Profili di build
+# ---------------------------------------------------------------------------
+#
+# Gestione rigida del panico: ABORT immediato, niente unwinding.
+# Di default Rust, davanti a un errore irreversibile, "srotola" la memoria dei
+# thread per tentare di riprendersi: richiede tempo e lascia il robot in uno
+# stato indefinito per diversi millisecondi. In robotica un bug può arrivare
+# mentre i motori stanno eseguendo un movimento: se il software prova a
+# "guarire" da solo rischia movimenti folli degli azionamenti.
+#
+# Con `panic = "abort"` il processo si spegne istantaneamente (~microsecondi),
+# le periferiche vengono lasciate nelle mani dei freni meccanici e l'Hardware
+# Watchdog resta l'unico arbitro di sicurezza del movimento.
+[profile.release]
+panic = "abort"

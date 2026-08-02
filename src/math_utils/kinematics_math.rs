@@ -84,11 +84,7 @@ impl Matrix3 {
 
     pub fn identity() -> Self {
         Self {
-            data: [
-                [1.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-                [0.0, 0.0, 1.0],
-            ],
+            data: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         }
     }
 
@@ -96,11 +92,7 @@ impl Matrix3 {
         let c = angle.cos();
         let s = angle.sin();
         Self {
-            data: [
-                [1.0, 0.0, 0.0],
-                [0.0, c, -s],
-                [0.0, s, c],
-            ],
+            data: [[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]],
         }
     }
 
@@ -108,11 +100,7 @@ impl Matrix3 {
         let c = angle.cos();
         let s = angle.sin();
         Self {
-            data: [
-                [c, 0.0, s],
-                [0.0, 1.0, 0.0],
-                [-s, 0.0, c],
-            ],
+            data: [[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]],
         }
     }
 
@@ -120,11 +108,7 @@ impl Matrix3 {
         let c = angle.cos();
         let s = angle.sin();
         Self {
-            data: [
-                [c, -s, 0.0],
-                [s, c, 0.0],
-                [0.0, 0.0, 1.0],
-            ],
+            data: [[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]],
         }
     }
 
@@ -146,9 +130,7 @@ impl Mul for Matrix3 {
         let mut result = [[0.0; 3]; 3];
         for i in 0..3 {
             for j in 0..3 {
-                result[i][j] = a[i][0] * b[0][j]
-                    + a[i][1] * b[1][j]
-                    + a[i][2] * b[2][j];
+                result[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
             }
         }
         Self { data: result }

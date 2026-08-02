@@ -1,6 +1,6 @@
+use crate::io_bridge::state_vector::StateVector;
 use std::fs::OpenOptions;
 use std::io::Write;
-use crate::io_bridge::state_vector::StateVector;
 
 pub struct TelemetryLogger {
     file_path: String,
@@ -23,7 +23,9 @@ impl TelemetryLogger {
         // Formatta i dati in una stringa JSON compatta per non pesare sulla CPU
         let log_line = format!(
             "{{\"timestamp\":{},\"hardware\":\"{}\",\"values\":{:?}}}\n",
-            state.timestamp, state.hardware_id, state.values
+            state.timestamp,
+            state.hardware_id,
+            state.as_slice()
         );
 
         file.write_all(log_line.as_bytes())?;

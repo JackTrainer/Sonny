@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use crate::io_bridge::command_vector::MAX_JOINTS;
 use crate::io_bridge::state_vector::StateVector;
+use std::sync::Arc;
 
 pub struct AlphaZenohBus {
     session: Arc<zenoh::Session>,
@@ -10,10 +11,14 @@ impl AlphaZenohBus {
         Self { session }
     }
 
-    pub async fn transmit_telemetry(&self, state: &StateVector) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn transmit_telemetry(
+        &self,
+        state: &StateVector,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let routing_key = format!("alpha/telemetry/{}", state.hardware_id);
-        let payload = state.to_bytes();
-        self.session.put(&routing_key, payload).await?;
+        let mut buf = [0u8; MAX_JOINTS * 4];
+        let n = state.write_to(&mut buf);
+        self.session.put(&routing_key, &buf[..n]).await?;
         Ok(())
     }
 }

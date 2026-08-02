@@ -1,0 +1,123 @@
+{
+  "robot_name": "Franka-Emika-Panda",
+  "manufacturer": "Franka Emika",
+  "brand": "FRANKA-EMIKA",
+  "dof": 7,
+  "expected_hz": 1000.0,
+  "max_jitter_us": 500,
+  "joints": [
+    {
+      "name": "joint1",
+      "min_angle_rad": -2.8973,
+      "max_angle_rad": 2.8973,
+      "max_speed_rad_s": 2.175,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 100.0
+    },
+    {
+      "name": "joint2",
+      "min_angle_rad": -1.7628,
+      "max_angle_rad": 1.7628,
+      "max_speed_rad_s": 2.175,
+      "home_angle_rad": -0.7854,
+      "gear_ratio": 100.0
+    },
+    {
+      "name": "joint3",
+      "min_angle_rad": -2.8973,
+      "max_angle_rad": 2.8973,
+      "max_speed_rad_s": 2.175,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 100.0
+    },
+    {
+      "name": "joint4",
+      "min_angle_rad": -3.0718,
+      "max_angle_rad": -0.0698,
+      "max_speed_rad_s": 2.175,
+      "home_angle_rad": -2.3562,
+      "gear_ratio": 100.0
+    },
+    {
+      "name": "joint5",
+      "min_angle_rad": -2.8973,
+      "max_angle_rad": 2.8973,
+      "max_speed_rad_s": 2.618,
+      "home_angle_rad": 0.0,
+      "gear_ratio": 100.0
+    },
+    {
+      "name": "joint6",
+      "min_angle_rad": -0.0175,
+      "max_angle_rad": 3.7525,
+      "max_speed_rad_s": 2.618,
+      "home_angle_rad": 1.5708,
+      "gear_ratio": 100.0
+    },
+    {
+      "name": "joint7",
+      "min_angle_rad": -2.8973,
+      "max_angle_rad": 2.8973,
+      "max_speed_rad_s": 2.967,
+      "home_angle_rad": 0.7854,
+      "gear_ratio": 100.0
+    }
+  ],
+  "fieldbus": {
+    "protocol": "Udp",
+    "bind_addr": "192.168.1.1:0",
+    "remote_addr": "192.168.1.2:30401",
+    "frame_timeout_ms": 1,
+    "reconnect_delay_ms": 2000
+  },
+  "kinematic_chain": [
+    {
+      "parent": "base",
+      "child": "joint1",
+      "translation_m": [0.0, 0.0, 0.333],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "joint1",
+      "child": "joint2",
+      "translation_m": [0.0, 0.0, 0.0],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "joint2",
+      "child": "joint3",
+      "translation_m": [0.0, 0.0, 0.316],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "joint3",
+      "child": "joint4",
+      "translation_m": [0.0, 0.0, 0.0],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "joint4",
+      "child": "joint5",
+      "translation_m": [0.0, 0.0, 0.384],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "joint5",
+      "child": "joint6",
+      "translation_m": [0.0, 0.0, 0.0],
+      "rotation_axis": [0.0, 1.0, 0.0]
+    },
+    {
+      "parent": "joint6",
+      "child": "joint7",
+      "translation_m": [0.0, 0.0, 0.0],
+      "rotation_axis": [0.0, 0.0, 1.0]
+    },
+    {
+      "parent": "joint7",
+      "child": "end_effector",
+      "translation_m": [0.0, 0.0, 0.107],
+      "rotation_axis": [0.0, 0.0, 0.0]
+    }
+  ]
+}

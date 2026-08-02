@@ -1,7 +1,4 @@
 
-
-
-
 # 🪐 SONNY OS — Core Minimal Microkernel
 
 [![License: AGPL v3](https://shields.io)](https://gnu.org)
@@ -57,6 +54,27 @@ SONNY OS reduces any mechanical complexity or joint geometry into a standardized
 
 ---
 
+## 🤖 Hardware Compatibility
+
+SONNY OS is compatible out-of-the-box with the major industrial robot brands. The brand is auto-detected from the `manufacturer` field of the HAL JSON (or forced via the optional `brand` field); each profile selects a native protocol codec in `src/io_bridge/adapters/` while the kernel stays byte-for-byte identical.
+
+| Brand | Profile | Native protocol | Sample config |
+|-------|---------|-----------------|---------------|
+| KUKA | `KUKA` | Ethernet KRL (XML over TCP, port 7911) | `configs/kuka_kr6_r900.json` |
+| Comau | `COMAU` | PDL2 socket bridge (CSV over TCP) | `configs/comau_racer5.json` |
+| Universal Robots | `UNIVERSAL-ROBOTS` | RT Client (TCP 30003, binary) + URScript (30002) | `configs/universal_robots_ur5e.json` |
+| Franka Emika | `FRANKA-EMIKA` | FCI (UDP 30401, 1 kHz) | `configs/franka_emika_panda.json` |
+| Standard AMR | `AMR` | ROS2 Twist/Odom mapping (differential) | `configs/amr_standard_base.json` |
+| Any other | `GENERIC` | Fixed f32 LE binary frame | `configs/robot_6dof_anthropomorphic.json` |
+
+Telemetry from the robot (whatever the brand) is normalized into the same fixed `[f32; 32]` state vector and published on `alpha/telemetry/{id}`; commands published on `alpha/cmd/{id}` are encoded into the brand-native protocol by the adapter. Safety (joint-limit clamping, ESTOP, hard watchdog) applies before encoding, in brand-independent vector space.
+
+```bash
+cargo run --release -- configs/kuka_kr6_r900.json
+```
+
+---
+
 ## 📁 Repository Structure
 
 ```text
@@ -103,5 +121,3 @@ The microkernel will spin up an isolated, virtual asynchronous runtime instance,
 
 * **Open-Source Contribution:** We welcome global contributions to expand the HAL JSON drivers for specific robot models. This core is licensed under the **GNU Affero General Public License v3 (AGPLv3)**. Any commercial use or modifications of this infrastructure must remain public and open-source under the same terms.
 * **Enterprise Beta:** To unlock the full Causal Engine, the 3-minute local "Dreaming" optimization loops, and 24/7 mission-critical production SLAs for 3PL and fulfillment centers without open-source copyleft restrictions, visit our official platform - https://alpha-robotics.it/
-
-

@@ -5,3 +5,4 @@ pub mod mocks;
 pub mod network_hook;
 pub mod registry;
 pub mod ros2_bridge;
+pub mod system;

@@ -1,4 +1,9 @@
+pub mod adapters;
 pub mod command_vector;
 pub mod hal_loader;
 pub mod hardware_abstraction;
+pub mod jerk_limiter;
+pub mod robot_brand;
 pub mod state_vector;
+pub mod vector_sanitizer;
+pub mod watchdog_timer;

@@ -80,15 +80,61 @@ cargo run --release -- configs/kuka_kr6_r900.json
 ```text
 SONNY/
 ├── LICENSE                         # GNU AGPLv3 Copyleft License
-├── Cargo.toml                      # Native dependencies (Tokio, Zenoh, Serde)
+├── README.md                       # Documentation
+├── Cargo.toml                      # Native dependencies (Tokio, Zenoh, Serde, libc)
+├── Cargo.lock
+├── configs/                        # Declarative robot profiles (OpenHalConfig JSON)
+│   ├── amr_standard_base.json
+│   ├── comau_racer5.json
+│   ├── franka_emika_panda.json
+│   ├── kuka_kr6_r900.json
+│   ├── robot_6dof_anthropomorphic.json
+│   └── universal_robots_ur5e.json
 └── src/
-    ├── main.rs                     # Asynchronous bootloader & kernel initialization
-    ├── io_bridge/                  # Universal hardware vector linearizer & JSON HAL loader
-    ├── math_utils/                 # Spatial vector math, kinematics, and quaternions
-    ├── diagnostics/                # Real-time Terminal UI, logger, and 100Hz jitter monitor
-    ├── mocks/                      # Sinusoidal virtual hardware simulator for rapid testing
-    ├── registry/                   # Secure WebAssembly (WASM) isolated skill execution sandbox
-    └── network_hook/               # Zero-copy telemetry clients and Zenoh unifiers
+    ├── main.rs                     # Async bootloader, RT thread pinning, fieldbus resolution
+    ├── lib.rs                      # Crate root, public module exports
+    ├── diagnostics/
+    │   ├── mod.rs
+    │   ├── frequency_enforcer.rs   # 100 Hz jitter monitor against control deadlines
+    │   ├── telemetry_logger.rs     # Telemetry serialization on the fixed state vector
+    │   └── terminal_ui.rs          # Live real-time terminal dashboard
+    ├── io_bridge/
+    │   ├── mod.rs
+    │   ├── adapters/
+    │   │   ├── mod.rs
+    │   │   ├── amr_ros2.rs         # ROS2 Twist/Odom mapping (differential AMR)
+    │   │   ├── comau_pdl.rs        # PDL2 socket bridge (CSV over TCP)
+    │   │   ├── franka_fci.rs       # FCI UDP 30401 (1 kHz)
+    │   │   ├── generic_binary.rs   # Fixed f32 LE binary frame
+    │   │   ├── kuka_eth_krl.rs     # Ethernet KRL (XML over TCP 7911)
+    │   │   └── universal_robots.rs # RT Client TCP 30003 + URScript 30002
+    │   ├── command_vector.rs       # Fixed [f32; MAX_JOINTS] command buffer
+    │   ├── hal_loader.rs           # OpenHalConfig JSON loader -> FieldbusConfig
+    │   ├── hardware_abstraction.rs # Fieldbus loops (Serial/UDP/TCP) + clamp_command
+    │   ├── jerk_limiter.rs         # 3rd-order jerk/accel/speed saturation chain
+    │   ├── robot_brand.rs          # Brand auto-detection & profile selection
+    │   ├── state_vector.rs         # Fixed [f32; MAX_JOINTS] telemetry state
+    │   ├── vector_sanitizer.rs     # NaN/Inf replacement + geometric clamp
+    │   └── watchdog_timer.rs       # HardWatchdog heartbeat + E-stop
+    ├── math_utils/
+    │   ├── mod.rs
+    │   └── kinematics_math.rs      # Spatial vector math, kinematics, quaternions
+    ├── mocks/
+    │   ├── mod.rs
+    │   └── virtual_hardware_mock.rs # Sinusoidal virtual hardware simulator
+    ├── network_hook/
+    │   ├── mod.rs
+    │   ├── telemetry_client.rs     # Zero-copy telemetry client
+    │   └── zenoh_bus.rs            # Zenoh unified ultra-low-latency bus
+    ├── registry/
+    │   ├── mod.rs
+    │   └── wasm_runner.rs          # WASM isolated skill execution sandbox
+    ├── ros2_bridge/
+    │   ├── mod.rs
+    │   └── topic_converter.rs      # ROS2 topics <-> SONNY vector conversion
+    └── system/
+        ├── mod.rs
+        └── rt_thread.rs            # CPU affinity + SCHED_FIFO / nice -20 pinning
 ```
 
 ---

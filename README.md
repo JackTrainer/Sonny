@@ -1,3 +1,4 @@
+<img width="1983" height="793" alt="image" src="https://github.com/user-attachments/assets/bf806f8d-8a9b-4dcb-b1c6-c6eb8ad35700" />
 
 # 🪐 SONNY OS — Core Minimal Microkernel
 

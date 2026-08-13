@@ -13,6 +13,11 @@ use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 /// l'ultimo valore sicuro registrato nel tick precedente, poi il comando
 /// viene limitato ai limiti fisici dichiarati nel JSON. Zero allocazioni:
 /// lo storico vive in un array statico pre-allocato.
+///
+/// Esegue esclusivamente sul **Core 1** della CPU, dentro il thread dedicato
+/// del loop di controllo a 100 Hz (`RealTimeControlLoop` in
+/// `diagnostics::frequency_enforcer`): la sanificazione non condivide mai la
+/// cache con il runtime Wasmtime del Core 2.
 pub struct VectorSanitizer {
     last_safe: [f32; MAX_JOINTS],
 }

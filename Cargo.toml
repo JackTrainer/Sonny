@@ -22,6 +22,10 @@ tokio-serial = { version = "5.4" }
 # (sched_setaffinity, sched_setscheduler/SCHED_FIFO, setpriority)
 libc = "0.2"
 
+# Pinning cross-platform dei thread su core dedicati: il loop di controllo
+# real-time a 100 Hz vive sul Core 1, il runtime Wasmtime sul Core 2.
+core_affinity = "0.8"
+
 # ---------------------------------------------------------------------------
 # Profili di build
 # ---------------------------------------------------------------------------

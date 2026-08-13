@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use SONNY::diagnostics;
+use SONNY::diagnostics::frequency_enforcer::{LatestCommand, RealTimeControlLoop};
 use SONNY::io_bridge;
 use SONNY::io_bridge::hal_loader::HardwareConfig;
 use SONNY::io_bridge::hardware_abstraction::{FieldbusConfig, FieldbusTransport};
@@ -80,6 +81,16 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let zenoh_session = Arc::new(zenoh::open(zenoh::Config::default()).await?);
     println!("[BOOT] Bus Zenoh agganciato correttamente.");
 
+    // Canale di comunicazione tra il runtime WASM (Core 2) e il loop di
+    // controllo (Core 1): buffer circolare lock-free a capacità 1. Il Core 1
+    // legge senza mai attendere WASM; se lo slot è vuoto riusa l'ultimo
+    // vettore valido e il ciclo a 100 Hz non salta mai.
+    let command_buffer = Arc::new(LatestCommand::new());
+
+    // Heartbeat unico condiviso tra loop di controllo e Hard-Watchdog: è il
+    // Core 1 a batterlo a ogni frame, il watchdog sorveglia solo l'età.
+    let control_heartbeat = Arc::new(Heartbeat::new());
+
     // ------------------------------------------------------------------
     // 2. Configurazione fieldbus: file JSON > variabili d'ambiente
     // ------------------------------------------------------------------
@@ -104,8 +115,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     });
 
     let session_for_skills = zenoh_session.clone();
+    let buffer_for_skills = command_buffer.clone();
     tokio::spawn(async move {
-        if let Err(e) = registry::wasm_runner::listen_for_skills(session_for_skills).await {
+        if let Err(e) = registry::wasm_runner::listen_for_skills(session_for_skills, buffer_for_skills).await {
             eprintln!("[ERROR] Registry Skill: {:?}", e);
         }
     });
@@ -137,11 +149,11 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // ------------------------------------------------------------------
     let session_for_wd = zenoh_session.clone();
     let name_for_wd = robot_name.clone();
+    let heartbeat_for_wd = control_heartbeat.clone();
     tokio::spawn(async move {
-        let heartbeat = Arc::new(Heartbeat::new());
         let watchdog = Arc::new(HardWatchdog::new(
             session_for_wd.clone(),
-            heartbeat.clone(),
+            heartbeat_for_wd.clone(),
             &name_for_wd,
             dof,
             WatchdogConfig::default(),
@@ -156,14 +168,39 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             WatchdogConfig::default().heartbeat_timeout_ms
         );
 
-        // Finché non esiste un modulo di controllo dedicato, un pinger a
-        // 100 Hz sostituisce il battito del cuore. In produzione sarà il
-        // modulo di controllo a chiamare heartbeat.ping() a ogni ciclo.
-        let mut ticker = tokio::time::interval(Duration::from_millis(10));
-        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        // Il battito lo genera il loop di controllo a 100 Hz sul Core 1: se
+        // quel thread muore o si blocca, il watchdog scatta. Il task qui si
+        // limita a mantenere vivo il monitor del watchdog (nessun pinger di
+        // ripiego: il cuore vero batte solo dal Core 1).
         loop {
-            ticker.tick().await;
-            heartbeat.ping();
+            tokio::time::sleep(Duration::from_secs(3600)).await;
+        }
+    });
+
+    // ------------------------------------------------------------------
+    // Loop di controllo real-time a 100 Hz (Core 1): legge dal buffer
+    // lock-free senza attendere WASM, sanifica il vettore, batte
+    // l'heartbeat e pubblica il comando verso l'HAL.
+    // ------------------------------------------------------------------
+    let session_for_rt = zenoh_session.clone();
+    let name_for_rt = robot_name.clone();
+    let hb_for_rt = control_heartbeat.clone();
+    let buffer_for_rt = command_buffer.clone();
+    let limits_for_rt = joint_limits.clone();
+    tokio::spawn(async move {
+        let rt_loop = RealTimeControlLoop::new(
+            session_for_rt,
+            &name_for_rt,
+            hb_for_rt,
+            buffer_for_rt,
+            dof,
+            limits_for_rt,
+            expected_hz,
+            max_jitter_us,
+        );
+        match rt_loop.start() {
+            Ok(_) => println!("[BOOT] Loop di controllo 100 Hz avviato sul Core 1."),
+            Err(e) => eprintln!("[ERROR] Loop real-time 100 Hz: {:?}", e),
         }
     });
 

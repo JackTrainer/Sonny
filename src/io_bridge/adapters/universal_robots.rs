@@ -4,10 +4,10 @@ use crate::io_bridge::adapters::{BrandAdapter, FrameStrategy};
 use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 use crate::io_bridge::robot_brand::RobotBrand;
 
-/// Codec Universal Robots: **Real-Time Client** (porta 30003, binario)
-/// per la telemetria + **URScript** (porta 30002) per i comandi.
+/// Universal Robots codec: **Real-Time Client** (port 30003, binary) for
+/// telemetry + **URScript** (port 30002) for commands.
 ///
-/// Formato Real-Time Client (documentazione UR, trasmesso a 125 Hz):
+/// Real-Time Client format (UR documentation, transmitted at 125 Hz):
 /// ```text
 /// int32   message_size      (big-endian)
 /// double  time
@@ -20,8 +20,8 @@ use crate::io_bridge::robot_brand::RobotBrand;
 /// double  qd_actual[6]      (offset body 296)
 /// ...
 /// ```
-/// Comandi in URScript: `servoj([q1,..,q6], 0, 0, 0.008, 0.05, 100)` — servo
-/// in tempo reale con i giunti target del vettore di comando.
+/// URScript commands: `servoj([q1,..,q6], 0, 0, 0.008, 0.05, 100)` — real-time
+/// servo on the target joints of the command vector.
 pub struct UniversalRobots;
 
 const UR_JOINTS: usize = 6;

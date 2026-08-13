@@ -2,17 +2,17 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::io_bridge::command_vector::MAX_JOINTS;
 
-/// Rappresentazione matematica standardizzata della telemetria in ingresso.
+/// Standardized mathematical representation of the incoming telemetry.
 ///
-/// Vettore a dimensione **fissa** `[f32; 32]`: il `StateVector` viene
-/// pre-allocato una sola volta all'avvio del robot e aggiornato *in-place*
-/// a ogni frame telemetrico con [`StateVector::set_values`], senza alcuna
-/// allocazione sull'heap durante il loop a 100 Hz.
+/// Fixed-size **vector** `[f32; 32]`: the `StateVector` is
+/// pre-allocated only once at robot startup and updated *in-place*
+/// on every telemetry frame with [`StateVector::set_values`], with no heap
+/// allocation during the 100 Hz loop.
 #[derive(Debug, Clone)]
 pub struct StateVector {
     pub hardware_id: String,
     pub timestamp: u64,
-    pub values: [f32; MAX_JOINTS], // Sensori, giunti e contatti linearizzati
+    pub values: [f32; MAX_JOINTS], // Linearized sensors, joints, and contacts
     pub len: usize,
 }
 
@@ -28,8 +28,8 @@ impl StateVector {
         v
     }
 
-    /// Aggiorna il vettore *in-place* (nessuna allocazione): ricopia i valori
-    /// nell'array statico e timbra un nuovo timestamp di telemetria.
+    /// Updates the vector *in-place* (no allocation): copies the values
+    /// back into the static array and stamps a new telemetry timestamp.
     pub fn set_values(&mut self, values: &[f32]) {
         let n = values.len().min(MAX_JOINTS);
         self.values[..n].copy_from_slice(&values[..n]);
@@ -45,9 +45,9 @@ impl StateVector {
         &mut self.values[..self.len]
     }
 
-    /// Serializzazione binaria a basso costo **senza allocazione** (f32 LE),
-    /// stesso formato del `CommandVector`: basta un unico parser lato
-    /// microcontrollore. Restituisce i byte scritti in `out`.
+    /// Low-cost binary serialization **without allocation** (f32 LE),
+    /// same format as `CommandVector`: a single parser on the
+    /// microcontroller side is enough. Returns the bytes written into `out`.
     pub fn write_to(&self, out: &mut [u8]) -> usize {
         let n = self.len.min(out.len() / 4);
         let mut written = 0;

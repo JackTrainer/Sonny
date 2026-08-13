@@ -2,9 +2,9 @@ use crate::io_bridge::adapters::{BrandAdapter, FrameStrategy};
 use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 use crate::io_bridge::robot_brand::RobotBrand;
 
-/// Codec binario generico: frame f32 little-endian, 4 byte per giunto.
-/// È il formato nativo dei vettori SONNY (`StateVector`/`CommandVector`):
-/// un unico parser lato microcontrollore per telemetria e comandi.
+/// Generic binary codec: f32 little-endian frames, 4 bytes per joint.
+/// It is the native format of SONNY vectors (`StateVector`/`CommandVector`):
+/// a single parser on the microcontroller side for telemetry and commands.
 pub struct GenericBinary;
 
 impl BrandAdapter for GenericBinary {

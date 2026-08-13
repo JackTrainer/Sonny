@@ -1,14 +1,14 @@
-//! Adattatori di protocollo per i codec nativi dei marchi di robot.
+//! Protocol adapters for the native codecs of robot brands.
 //!
-//! Ogni adattatore implementa [`BrandAdapter`]: converte i byte grezzi del
-//! fieldbus del marchio in un [`StateVector`] (telemetria) e un
-//! [`CommandVector`] in byte nativi del marchio (comandi). Il nucleo SONNY
-//! resta identico: cambia solo il codec al bordo hardware.
+//! Each adapter implements [`BrandAdapter`]: it converts the raw bytes of the
+//! brand's fieldbus into a [`StateVector`] (telemetry) and a
+//! [`CommandVector`] into brand-native bytes (commands). The SONNY core
+//! stays identical: only the codec at the hardware edge changes.
 //!
-//! Strategie di framing supportate:
-//! - **Fixed**: frame a dimensione fissa (es. f32 LE generico, 4 byte/giunto);
-//! - **LengthPrefixed**: header di lunghezza (es. UR RT client, FCI);
-//! - **Delimited**: messaggi terminati da un delimitatore (XML KUKA, PDL2, JSON).
+//! Supported framing strategies:
+//! - **Fixed**: fixed-size frames (e.g. generic f32 LE, 4 bytes/joint);
+//! - **LengthPrefixed**: length header (e.g. UR RT client, FCI);
+//! - **Delimited**: messages terminated by a delimiter (KUKA XML, PDL2, JSON).
 
 pub mod amr_ros2;
 pub mod comau_pdl;
@@ -20,14 +20,14 @@ pub mod universal_robots;
 use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 use crate::io_bridge::robot_brand::RobotBrand;
 
-/// Strategia di framing del protocollo nativo.
+/// Framing strategy of the native protocol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameStrategy {
-    /// Frame a dimensione fissa: `joint_count * bytes_per_joint`.
+    /// Fixed-size frame: `joint_count * bytes_per_joint`.
     Fixed { bytes_per_joint: usize },
-    /// Header di lunghezza (big-endian) seguito dal payload.
+    /// Length header (big-endian) followed by the payload.
     LengthPrefixed { header_bytes: usize },
-    /// Messaggi delimitati da una sequenza finale (XML, testo, JSON).
+    /// Messages terminated by a trailing sequence (XML, text, JSON).
     Delimited { terminator: &'static [u8] },
 }
 
@@ -41,8 +41,8 @@ impl FrameStrategy {
     }
 }
 
-/// Codec nativo di un marchio. Deve essere `Send + Sync`: viene usato dagli
-/// stessi loop asincroni della `HardwareAbstraction`.
+/// Native codec of a brand. Must be `Send + Sync`: it is used by the same
+/// async loops as the `HardwareAbstraction`.
 pub trait BrandAdapter: Send + Sync {
     fn brand(&self) -> RobotBrand;
 
@@ -50,34 +50,34 @@ pub trait BrandAdapter: Send + Sync {
 
     fn frame_strategy(&self) -> FrameStrategy;
 
-    /// Decodifica UN messaggio di telemetria completo da `acc`.
+    /// Decodes ONE complete telemetry message from `acc`.
     ///
-    /// Restituisce `(byte_consumed, valori, giunti_attivi)` quando è presente
-    /// un frame completo, `None` quando servono altri byte. Non deve mai
-    /// allocare: i valori vengono scritti nell'array statico pre-allocato.
+    /// Returns `(byte_consumed, values, active_joints)` when a complete frame
+    /// is present, `None` when more bytes are needed. It must never allocate:
+    /// values are written into the pre-allocated static array.
     fn decode_telemetry(
         &self,
         acc: &[u8],
         joint_count: usize,
     ) -> Option<(usize, [f32; MAX_JOINTS], usize)>;
 
-    /// Codifica un comando nei byte nativi del marchio in `out`.
-    /// Restituisce i byte scritti. Non deve mai allocare.
+    /// Encodes a command into the brand's native bytes in `out`.
+    /// Returns the bytes written. It must never allocate.
     fn encode_command(&self, command: &CommandVector, out: &mut [u8]) -> usize;
 
-    /// Codifica il comando di ESTOP (tutti i giunti a zero) in forma nativa.
+    /// Encodes the ESTOP command (all joints at zero) in native form.
     fn encode_estop(&self, joint_count: usize, out: &mut [u8]) -> usize {
         let zeros = CommandVector::zeros(joint_count);
         self.encode_command(&zeros, out)
     }
 
-    /// Costo di pre-allocazione suggerito per il buffer di ricezione.
+    /// Suggested pre-allocation size for the receive buffer.
     fn buffer_hint(&self) -> usize {
         1024
     }
 }
 
-/// Seleziona il codec nativo in base al marchio.
+/// Selects the native codec based on the brand.
 pub fn adapter_for(brand: RobotBrand) -> Box<dyn BrandAdapter> {
     match brand {
         RobotBrand::Kuka => Box::new(kuka_eth_krl::KukaEthernetKrl),

@@ -11,8 +11,8 @@ use tokio::net::{TcpStream, UdpSocket};
 use tokio::time::sleep;
 use tokio_serial::{SerialPortBuilderExt, SerialStream};
 
-/// Buffer massimo per la codifica di un comando nel protocollo nativo del
-/// marchio (XML KUKA, URScript, JSON, binario f32 LE).
+/// Maximum buffer for encoding a command in the brand's native protocol
+/// (XML KUKA, URScript, JSON, binary f32 LE).
 const COMMAND_BUF: usize = 2048;
 
 #[derive(Debug, Clone)]
@@ -37,20 +37,20 @@ pub struct FieldbusConfig {
     pub joint_count: usize,
     pub frame_timeout_ms: u64,
     pub reconnect_delay_ms: u64,
-    /// Limiti fisici [min, max] in rad per ogni giunto: clamp di sicurezza
-    /// applicato a OGNI comando prima che raggiunga gli azionamenti.
+    /// Physical limits [min, max] in rad per joint: safety clamp applied to
+    /// EVERY command before it reaches the actuators.
     pub joint_limits_rad: Vec<(f32, f32)>,
-    /// Frequenza nominale del loop di controllo (Hz): periodo del tick usato
-    /// dal limitatore di jerk.
+    /// Nominal control loop frequency (Hz): tick period used by the jerk
+    /// limiter.
     pub expected_hz: f64,
-    /// Velocità massima per giunto (rad/s): limita la derivata prima.
+    /// Maximum speed per joint (rad/s): limits the first derivative.
     pub max_speed_rad_s: Vec<f32>,
-    /// Accelerazione massima per giunto (rad/s²): limita la derivata seconda.
+    /// Maximum acceleration per joint (rad/s²): limits the second derivative.
     pub max_accel_rad_s2: Vec<f32>,
-    /// Jerk massimo per giunto (rad/s³): limita la derivata terza e smussa la
-    /// curva di comando contro gli shock meccanici.
+    /// Maximum jerk per joint (rad/s³): limits the third derivative and
+    /// smooths the command curve against mechanical shocks.
     pub max_jerk_rad_s3: Vec<f32>,
-    /// Profilo di compatibilità del marchio: seleziona il codec nativo.
+    /// Brand compatibility profile: selects the native codec.
     pub brand: RobotBrand,
 }
 
@@ -75,25 +75,24 @@ impl Default for FieldbusConfig {
     }
 }
 
-/// Punto di contatto elettrico: byte grezzi dal fieldbus industriale → StateVector
-/// e StateVector → comandi attuatori (bidirezionale). Il codec dei byte grezzi
-/// dipende dal marchio (`RobotBrand`), selezionato tramite [`BrandAdapter`].
+/// Electrical contact point: raw bytes from the industrial fieldbus → StateVector
+/// and StateVector → actuator commands (bidirectional). The raw-bytes codec
+/// depends on the brand (`RobotBrand`), selected via [`BrandAdapter`].
 pub struct HardwareAbstraction {
     session: Arc<zenoh::Session>,
     config: FieldbusConfig,
     adapter: Box<dyn BrandAdapter>,
-    /// Intercettore di sicurezza: blocca NaN/Infinity e clampa i comandi
-    /// prima che raggiungano gli azionamenti. Protetto da Mutex perché il
-    /// loop di I/O è `&self`; il lock non viene mai tenuto attraverso un
-    /// `.await`.
+    /// Safety interceptor: blocks NaN/Infinity and clamps commands before they
+    /// reach the actuators. Protected by a Mutex because the I/O loop is
+    /// `&self`; the lock is never held across an `.await`.
     sanitizer: Mutex<VectorSanitizer>,
-    /// Limitatore di shock meccanico: smussa la curva di comando limitando
-    /// velocità, accelerazione e jerk (derivata terza).
+    /// Mechanical shock limiter: smooths the command curve by limiting speed,
+    /// acceleration, and jerk (third derivative).
     jerk_limiter: Mutex<JerkLimiter>,
 }
 
-/// Clamp di sicurezza: nessun comando può superare i limiti fisici del giunto.
-/// Opera su array statici pre-allocati: nessuna allocazione durante il loop.
+/// Safety clamp: no command may exceed the physical joint limits.
+/// Operates on static pre-allocated arrays: no allocation during the loop.
 pub fn clamp_to_limits(values: &[f32], limits: &[(f32, f32)]) -> CommandVector {
     let mut command = CommandVector::new();
     let n = values.len().min(MAX_JOINTS);
@@ -146,7 +145,7 @@ impl HardwareAbstraction {
 
     pub async fn start_loop(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!(
-            "[HARDWARE] Marchio: {} ({}), framing: {}",
+            "[HARDWARE] Brand: {} ({}), framing: {}",
             self.adapter.brand().label(),
             self.adapter.protocol_label(),
             self.adapter.frame_strategy().label()
@@ -164,7 +163,7 @@ impl HardwareAbstraction {
     }
 
     // -----------------------------------------------------------------------
-    // Fieldbus SERIALE
+    // Fieldbus SERIAL
     // -----------------------------------------------------------------------
     async fn run_serial_loop(
         &self,
@@ -182,8 +181,8 @@ impl HardwareAbstraction {
         let telemetry_topic = format!("alpha/telemetry/{}", self.config.hardware_id);
         let mut estop_active = false;
 
-        // Pre-allocazione all'avvio: StateVector e buffer di serializzazione
-        // creati una sola volta e riutilizzati per tutta la vita del processo.
+        // Pre-allocation at startup: StateVector and serialization buffer
+        // created once and reused for the whole life of the process.
         let mut state = StateVector::new(&self.config.hardware_id, &[]);
         let mut tx_buf = [0u8; MAX_JOINTS * 4];
 
@@ -191,7 +190,7 @@ impl HardwareAbstraction {
             let serial = match Self::open_serial(port, baud_rate).await {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("[HARDWARE] Errore apertura {}: {}", port, e);
+                    eprintln!("[HARDWARE] Error opening {}: {}", port, e);
                     self.publish_status(false, 0, false).await?;
                     sleep(Duration::from_millis(self.config.reconnect_delay_ms)).await;
                     continue;
@@ -199,7 +198,7 @@ impl HardwareAbstraction {
             };
 
             println!(
-                "[HARDWARE] Seriale {} @ {} baud (comandi su alpha/cmd/{})",
+                "[HARDWARE] Serial {} @ {} baud (commands on alpha/cmd/{})",
                 port, baud_rate, self.config.hardware_id
             );
 
@@ -221,11 +220,11 @@ impl HardwareAbstraction {
                                     .drain_frames(&mut acc, &mut frames, &mut state, &telemetry_topic, &mut tx_buf)
                                     .await
                                 {
-                                    eprintln!("[HARDWARE] Parsing frame: {}", e);
+                                    eprintln!("[HARDWARE] Frame parsing: {}", e);
                                 }
                             }
                             Err(e) => {
-                                eprintln!("[HARDWARE] Lettura seriale: {}", e);
+                                eprintln!("[HARDWARE] Serial read: {}", e);
                                 break;
                             }
                         }
@@ -238,7 +237,7 @@ impl HardwareAbstraction {
                                 if !bytes.is_empty() {
                                     let command = self.clamp_command(CommandVector::from_bytes(bytes.as_ref()));
                                     if let Err(e) = Self::write_command(&mut writer, self.adapter.as_ref(), &command).await {
-                                        eprintln!("[HARDWARE] Invio comando seriale: {}", e);
+                                        eprintln!("[HARDWARE] Serial command send: {}", e);
                                     }
                                 }
                             }
@@ -253,11 +252,11 @@ impl HardwareAbstraction {
                                     estop_active = active;
                                     if active {
                                         if let Err(e) = Self::write_estop(&mut writer, self.adapter.as_ref(), self.config.joint_count).await {
-                                            eprintln!("[SAFETY] Invio ESTOP: {}", e);
+                                            eprintln!("[SAFETY] ESTOP send: {}", e);
                                         }
-                                        eprintln!("[SAFETY] ESTOP ATTIVO su {}", self.config.hardware_id);
+                                        eprintln!("[SAFETY] ESTOP ENGAGED on {}", self.config.hardware_id);
                                     } else {
-                                        eprintln!("[SAFETY] ESTOP disattivato su {}", self.config.hardware_id);
+                                        eprintln!("[SAFETY] ESTOP released on {}", self.config.hardware_id);
                                     }
                                     self.publish_status(true, frames, estop_active).await?;
                                 }
@@ -274,7 +273,7 @@ impl HardwareAbstraction {
     }
 
     // -----------------------------------------------------------------------
-    // Fieldbus UDP (es. Franka FCI)
+    // Fieldbus UDP (e.g., Franka FCI)
     // -----------------------------------------------------------------------
     async fn run_udp_loop(
         &self,
@@ -292,7 +291,7 @@ impl HardwareAbstraction {
         let telemetry_topic = format!("alpha/telemetry/{}", self.config.hardware_id);
         let mut estop_active = false;
 
-        // Pre-allocazione all'avvio: nessuna allocazione durante il loop.
+        // Pre-allocation at startup: no allocation during the loop.
         let mut state = StateVector::new(&self.config.hardware_id, &[]);
         let mut tx_buf = [0u8; MAX_JOINTS * 4];
         let mut cmd_buf = [0u8; COMMAND_BUF];
@@ -301,21 +300,21 @@ impl HardwareAbstraction {
             let socket = match UdpSocket::bind(bind_addr).await {
                 Ok(s) => Arc::new(s),
                 Err(e) => {
-                    eprintln!("[HARDWARE] Errore bind UDP {}: {}", bind_addr, e);
+                    eprintln!("[HARDWARE] UDP bind error {}: {}", bind_addr, e);
                     self.publish_status(false, 0, estop_active).await?;
                     sleep(Duration::from_millis(self.config.reconnect_delay_ms)).await;
                     continue;
                 }
             };
             if let Err(e) = socket.connect(remote_addr).await {
-                eprintln!("[HARDWARE] Errore connect UDP {}: {}", remote_addr, e);
+                eprintln!("[HARDWARE] UDP connect error {}: {}", remote_addr, e);
                 self.publish_status(false, 0, estop_active).await?;
                 sleep(Duration::from_millis(self.config.reconnect_delay_ms)).await;
                 continue;
             }
 
             println!(
-                "[HARDWARE] UDP {} → {}, (comandi su alpha/cmd/{})",
+                "[HARDWARE] UDP {} -> {} (commands on alpha/cmd/{})",
                 bind_addr, remote_addr, self.config.hardware_id
             );
 
@@ -336,11 +335,11 @@ impl HardwareAbstraction {
                                     .drain_frames(&mut acc, &mut frames, &mut state, &telemetry_topic, &mut tx_buf)
                                     .await
                                 {
-                                    eprintln!("[HARDWARE] Parsing frame: {}", e);
+                                    eprintln!("[HARDWARE] Frame parsing: {}", e);
                                 }
                             }
                             Err(e) => {
-                                eprintln!("[HARDWARE] Ricezione UDP: {}", e);
+                                eprintln!("[HARDWARE] UDP receive: {}", e);
                                 break;
                             }
                         }
@@ -354,7 +353,7 @@ impl HardwareAbstraction {
                                     let command = self.clamp_command(CommandVector::from_bytes(bytes.as_ref()));
                                     let n = self.adapter.encode_command(&command, &mut cmd_buf);
                                     if let Err(e) = socket.send(&cmd_buf[..n]).await {
-                                        eprintln!("[HARDWARE] Invio comando UDP: {}", e);
+                                        eprintln!("[HARDWARE] UDP command send: {}", e);
                                     }
                                 }
                             }
@@ -370,11 +369,11 @@ impl HardwareAbstraction {
                                     if active {
                                         let n = self.adapter.encode_estop(self.config.joint_count, &mut cmd_buf);
                                         if let Err(e) = socket.send(&cmd_buf[..n]).await {
-                                            eprintln!("[SAFETY] Invio ESTOP: {}", e);
+                                            eprintln!("[SAFETY] ESTOP send: {}", e);
                                         }
-                                        eprintln!("[SAFETY] ESTOP ATTIVO su {}", self.config.hardware_id);
+                                        eprintln!("[SAFETY] ESTOP ENGAGED on {}", self.config.hardware_id);
                                     } else {
-                                        eprintln!("[SAFETY] ESTOP disattivato su {}", self.config.hardware_id);
+                                        eprintln!("[SAFETY] ESTOP released on {}", self.config.hardware_id);
                                     }
                                     self.publish_status(true, frames, estop_active).await?;
                                 }
@@ -415,7 +414,7 @@ impl HardwareAbstraction {
             let stream = match TcpStream::connect(remote_addr).await {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("[HARDWARE] Errore connect TCP {}: {}", remote_addr, e);
+                    eprintln!("[HARDWARE] TCP connect error {}: {}", remote_addr, e);
                     self.publish_status(false, 0, estop_active).await?;
                     sleep(Duration::from_millis(self.config.reconnect_delay_ms)).await;
                     continue;
@@ -423,7 +422,7 @@ impl HardwareAbstraction {
             };
 
             println!(
-                "[HARDWARE] TCP {} (comandi su alpha/cmd/{})",
+                "[HARDWARE] TCP {} (commands on alpha/cmd/{})",
                 remote_addr, self.config.hardware_id
             );
 
@@ -445,11 +444,11 @@ impl HardwareAbstraction {
                                     .drain_frames(&mut acc, &mut frames, &mut state, &telemetry_topic, &mut tx_buf)
                                     .await
                                 {
-                                    eprintln!("[HARDWARE] Parsing frame: {}", e);
+                                    eprintln!("[HARDWARE] Frame parsing: {}", e);
                                 }
                             }
                             Err(e) => {
-                                eprintln!("[HARDWARE] Ricezione TCP: {}", e);
+                                eprintln!("[HARDWARE] TCP receive: {}", e);
                                 break;
                             }
                         }
@@ -462,7 +461,7 @@ impl HardwareAbstraction {
                                 if !bytes.is_empty() {
                                     let command = self.clamp_command(CommandVector::from_bytes(bytes.as_ref()));
                                     if let Err(e) = Self::write_command(&mut writer, self.adapter.as_ref(), &command).await {
-                                        eprintln!("[HARDWARE] Invio comando TCP: {}", e);
+                                        eprintln!("[HARDWARE] TCP command send: {}", e);
                                     }
                                 }
                             }
@@ -477,11 +476,11 @@ impl HardwareAbstraction {
                                     estop_active = active;
                                     if active {
                                         if let Err(e) = Self::write_estop(&mut writer, self.adapter.as_ref(), self.config.joint_count).await {
-                                            eprintln!("[SAFETY] Invio ESTOP: {}", e);
+                                            eprintln!("[SAFETY] ESTOP send: {}", e);
                                         }
-                                        eprintln!("[SAFETY] ESTOP ATTIVO su {}", self.config.hardware_id);
+                                        eprintln!("[SAFETY] ESTOP ENGAGED on {}", self.config.hardware_id);
                                     } else {
-                                        eprintln!("[SAFETY] ESTOP disattivato su {}", self.config.hardware_id);
+                                        eprintln!("[SAFETY] ESTOP released on {}", self.config.hardware_id);
                                     }
                                     self.publish_status(true, frames, estop_active).await?;
                                 }
@@ -498,7 +497,7 @@ impl HardwareAbstraction {
     }
 
     // -----------------------------------------------------------------------
-    // Pipeline telemetria
+    // Telemetry pipeline
     // -----------------------------------------------------------------------
     async fn drain_frames(
         &self,
@@ -517,7 +516,7 @@ impl HardwareAbstraction {
             state.set_values(&values[..n]);
             let written = state.write_to(tx_buf);
             if let Err(e) = self.session.put(telemetry_topic, &tx_buf[..written]).await {
-                eprintln!("[HARDWARE] Pubblicazione telemetria: {}", e);
+                eprintln!("[HARDWARE] Telemetry publication: {}", e);
             }
             acc.drain(..consumed);
             *frames += 1;
@@ -526,12 +525,12 @@ impl HardwareAbstraction {
     }
 
     // -----------------------------------------------------------------------
-    // Pipeline comandi (sicurezza)
+    // Command pipeline (safety)
     // -----------------------------------------------------------------------
 
-    /// Pipeline comandi (sicurezza): prima sanifica i valori illegali
-    /// (NaN/Inf → ultimo valore sicuro, clamp geometrico), poi smussa la
-    /// curva limitando velocità, accelerazione e jerk (derivata terza).
+    /// Command pipeline (safety): first sanitizes illegal values
+    /// (NaN/Inf → last safe value, geometric clamp), then smooths the curve
+    /// by limiting speed, acceleration, and jerk (third derivative).
     fn clamp_command(&self, mut command: CommandVector) -> CommandVector {
         {
             let mut sanitizer = self
@@ -633,7 +632,7 @@ mod tests {
 
     #[test]
     fn fixed_vector_occupies_constant_memory() {
-        // [f32; 32] + len: la RAM è fissa indipendentemente dai DOF.
+        // [f32; 32] + len: RAM is fixed regardless of the DOF count.
         let small = CommandVector::zeros(2);
         let large = CommandVector::zeros(32);
         assert_eq!(std::mem::size_of_val(&small), std::mem::size_of_val(&large));

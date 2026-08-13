@@ -1,15 +1,15 @@
 //! # Hard-Watchdog
 //!
-//! Thread asincrono dedicato ad altissima priorità che sorveglia il segnale
-//! "sono vivo" (heartbeat) del modulo di controllo. Se l'heartbeat non arriva
-//! entro la finestra di sicurezza (10 ms di default), il watchdog scavalca il
-//! software, azzera gli azionamenti con un `CommandVector` di zeri e aggancia
-//! l'estop: qualunque cosa accada all'IA o a una Skill WASM di terze parti,
-//! il robot si ferma in sicurezza.
+//! Dedicated ultra-high-priority asynchronous thread that watches the control
+//! module's "alive" signal (heartbeat). If the heartbeat does not arrive
+//! within the safety window (10 ms by default), the watchdog bypasses the
+//! software, zeros the actuators with a `CommandVector` of zeros, and latches
+//! the estop: no matter what happens to the AI or a third-party WASM Skill,
+//! the robot stops safely.
 //!
-//! Il watchdog vive su un thread OS dedicato con runtime Tokio mono-thread
-//! privato: è il kernel, non Tokio, a schedularlo. Così resta vivo anche se il
-//! runtime principale del robot è bloccato da un ciclo infinito.
+//! The watchdog lives on a dedicated OS thread with a private single-threaded
+//! Tokio runtime: it is the kernel, not Tokio, that schedules it. It therefore
+//! stays alive even if the robot's main runtime is stuck in an infinite loop.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -17,15 +17,15 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 
-/// Finestra di default entro cui il modulo di controllo deve confermare
-/// l'heartbeat: 10 ms come da specifica.
+/// Default window within which the control module must confirm the heartbeat:
+/// 10 ms as per specification.
 pub const DEFAULT_HEARTBEAT_TIMEOUT_MS: u64 = 10;
 
-/// Granularità del controllo periodico: 1 ms → ~10 campioni per finestra.
+/// Periodic check granularity: 1 ms → ~10 samples per window.
 pub const DEFAULT_CHECK_INTERVAL_MS: u64 = 1;
 
-/// Intervallo con cui, a watchdog scattato, viene ripubblicato il vettore di
-/// zeri verso i registri fisici dell'hardware.
+/// Interval at which the vector of zeros is re-published to the physical
+/// hardware registers while the watchdog is tripped.
 pub const DEFAULT_REASSERT_INTERVAL_MS: u64 = 10;
 
 fn now_ms() -> u64 {
@@ -35,31 +35,31 @@ fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
-/// Registro condiviso del segnale "sono vivo".
+/// Shared register for the "alive" signal.
 ///
-/// Il modulo di controllo chiama [`Heartbeat::ping`] a ogni ciclo di comando;
-/// il watchdog legge solo l'età dell'ultimo battito. Niente lock: un singolo
-/// `AtomicU64` è sufficiente e resta non bloccante per il loop di controllo.
+/// The control module calls [`Heartbeat::ping`] every command cycle; the
+/// watchdog only reads the age of the last beat. No locks: a single
+/// `AtomicU64` is sufficient and remains non-blocking for the control loop.
 #[derive(Debug)]
 pub struct Heartbeat {
     last_ping_ms: AtomicU64,
 }
 
 impl Heartbeat {
-    /// Inizializza l'heartbeat "appena battuto": il watchdog dà per vivo il
-    /// controllo già da subito, senza falso scatto all'avvio.
+    /// Initializes the heartbeat as "just beaten": the watchdog considers the
+    /// control alive right away, without a false trip at startup.
     pub fn new() -> Self {
         Self {
             last_ping_ms: AtomicU64::new(now_ms()),
         }
     }
 
-    /// Da chiamare dal modulo di controllo a ogni ciclo di comando (≥ 100 Hz).
+    /// To be called by the control module every command cycle (≥ 100 Hz).
     pub fn ping(&self) {
         self.last_ping_ms.store(now_ms(), Ordering::Relaxed);
     }
 
-    /// Età dell'ultimo battito in millisecondi.
+    /// Age of the last beat in milliseconds.
     fn age_ms(&self) -> u64 {
         now_ms().saturating_sub(self.last_ping_ms.load(Ordering::Relaxed))
     }
@@ -71,15 +71,15 @@ impl Default for Heartbeat {
     }
 }
 
-/// Parametri di intervento dell'Hard-Watchdog.
+/// Hard-Watchdog intervention parameters.
 #[derive(Debug, Clone)]
 pub struct WatchdogConfig {
-    /// Ritardo massimo accettato tra due heartbeat prima dell'intervento.
+    /// Maximum accepted delay between two heartbeats before intervention.
     pub heartbeat_timeout_ms: u64,
-    /// Granularità del polling del registro heartbeat.
+    /// Polling granularity of the heartbeat register.
     pub check_interval_ms: u64,
-    /// Intervallo di ripubblicazione del vettore di zeri mentre il watchdog è
-    /// scattato (mantiene forzati a zero i registri fisici).
+    /// Interval for re-publishing the vector of zeros while the watchdog is
+    /// tripped (keeps the physical registers forced to zero).
     pub reassert_interval_ms: u64,
 }
 
@@ -93,12 +93,12 @@ impl Default for WatchdogConfig {
     }
 }
 
-/// Sorvegliante di sicurezza hardware.
+/// Hardware safety supervisor.
 ///
-/// Sul bus pubblica:
-/// - `alpha/cmd/<id>`            → `CommandVector` di zeri;
-/// - `alpha/cmd/<id>/estop`      → 1 = aggancia il latch, 0 = rilascia;
-/// - `alpha/watchdog/status/<id>`→ telemetria di stato del watchdog.
+/// On the bus it publishes:
+/// - `alpha/cmd/<id>`            → `CommandVector` of zeros;
+/// - `alpha/cmd/<id>/estop`      → 1 = engage the latch, 0 = release;
+/// - `alpha/watchdog/status/<id>`→ watchdog status telemetry.
 pub struct HardWatchdog {
     session: Arc<zenoh::Session>,
     hardware_id: String,
@@ -130,27 +130,27 @@ impl HardWatchdog {
         }
     }
 
-    /// Numero di interventi di sicurezza eseguiti dall'avvio.
+    /// Number of safety interventions performed since startup.
     pub fn trips(&self) -> u64 {
         self.trips.load(Ordering::Relaxed)
     }
 
-    /// `true` se il watchdog è attualmente scattato (azionamenti a zero).
+    /// `true` if the watchdog is currently tripped (actuators zeroed).
     pub fn is_tripped(&self) -> bool {
         self.tripped.load(Ordering::Relaxed)
     }
 
-    /// Richiede l'arresto ordinato del loop (smontaggio supervisionato e test).
-    /// In produzione il watchdog resta armato per tutta la vita del robot.
+    /// Requests an orderly shutdown of the loop (supervised teardown and tests).
+    /// In production the watchdog stays armed for the robot's whole life.
     pub fn shutdown(&self) {
         self.stop.store(true, Ordering::Relaxed);
     }
 
-    /// Avvia il thread dedicato Hard-Watchdog ad altissima priorità.
+    /// Starts the dedicated ultra-high-priority Hard-Watchdog thread.
     ///
-    /// Il thread possiede un runtime Tokio mono-thread privato: se il runtime
-    /// principale viene bloccato da una Skill WASM malvagia, questo thread
-    /// continua comunque a battere perché è l'OS a schedularlo.
+    /// The thread owns a private single-threaded Tokio runtime: if the main
+    /// runtime gets blocked by a malicious WASM Skill, this thread keeps beating
+    /// anyway because the OS schedules it.
     pub fn start(self: Arc<Self>) -> std::io::Result<std::thread::JoinHandle<()>> {
         let handle = std::thread::Builder::new()
             .name("hard-watchdog".into())
@@ -162,7 +162,7 @@ impl HardWatchdog {
                 {
                     Ok(rt) => rt,
                     Err(e) => {
-                        eprintln!("[HARD-WATCHDOG] Runtime dedicato non disponibile: {}", e);
+                        eprintln!("[HARD-WATCHDOG] Dedicated runtime unavailable: {}", e);
                         return;
                     }
                 };
@@ -176,8 +176,8 @@ impl HardWatchdog {
         let estop_topic = format!("alpha/cmd/{}/estop", self.hardware_id);
         let status_topic = format!("alpha/watchdog/status/{}", self.hardware_id);
 
-        // Vettore di sicurezza pre-allocato: zeri serializzati una sola volta
-        // in un buffer statico a stack, riutilizzato a ogni intervento.
+        // Pre-allocated safety vector: zeros serialized once into a static stack
+        // buffer, reused on every intervention.
         let zero_cmd = CommandVector::zeros(self.joint_count);
         let mut zero_buf = [0u8; MAX_JOINTS * 4];
         let zero_len = zero_cmd.write_to(&mut zero_buf);
@@ -197,28 +197,28 @@ impl HardWatchdog {
 
             if age > self.config.heartbeat_timeout_ms {
                 if !self.tripped.swap(true, Ordering::Relaxed) {
-                    // Transizione vivo → morto: intervento di sicurezza.
+                    // Alive → dead transition: safety intervention.
                     self.trips.fetch_add(1, Ordering::Relaxed);
                     self.intervene(&cmd_topic, &estop_topic, &status_topic, zero_bytes)
                         .await;
                     last_force_at = tokio::time::Instant::now();
                     eprintln!(
-                        "[HARD-WATCHDOG] SCATTO su {}: heartbeat muto da {} ms (timeout {} ms). Azionamenti azzerati.",
+                        "[HARD-WATCHDOG] TRIP on {}: heartbeat silent for {} ms (timeout {} ms). Actuators zeroed.",
                         self.hardware_id, age, self.config.heartbeat_timeout_ms
                     );
                 } else if last_force_at.elapsed()
                     >= Duration::from_millis(self.config.reassert_interval_ms)
                 {
-                    // Continua a mantenere i registri fisici a zero finché il
-                    // controllo non torna vivo.
+                    // Keep forcing the physical registers to zero until the
+                    // control comes back alive.
                     self.reassert_zeros(&cmd_topic, zero_bytes).await;
                     last_force_at = tokio::time::Instant::now();
                 }
             } else if self.tripped.swap(false, Ordering::Relaxed) {
-                // Transizione morto → vivo: rilascio del latch di sicurezza.
+                // Dead → alive transition: release the safety latch.
                 self.release_estop(&estop_topic).await;
                 println!(
-                    "[HARD-WATCHDOG] Heartbeat ripristinato su {}: latch di sicurezza rilasciato.",
+                    "[HARD-WATCHDOG] Heartbeat restored on {}: safety latch released.",
                     self.hardware_id
                 );
             }
@@ -227,7 +227,7 @@ impl HardWatchdog {
         }
     }
 
-    /// Intervento completo: vettore di zeri ai registri + aggancio estop.
+    /// Full intervention: vector of zeros to the registers + engage estop.
     async fn intervene(
         &self,
         cmd_topic: &str,
@@ -236,26 +236,26 @@ impl HardWatchdog {
         zero_bytes: &[u8],
     ) {
         if let Err(e) = self.session.put(cmd_topic, zero_bytes.to_vec()).await {
-            eprintln!("[HARD-WATCHDOG] Invio zeri a {}: {}", cmd_topic, e);
+            eprintln!("[HARD-WATCHDOG] Sending zeros to {}: {}", cmd_topic, e);
         }
         if let Err(e) = self.session.put(estop_topic, vec![1u8]).await {
-            eprintln!("[HARD-WATCHDOG] Aggancio estop a {}: {}", estop_topic, e);
+            eprintln!("[HARD-WATCHDOG] Engaging estop on {}: {}", estop_topic, e);
         }
         self.publish_status(status_topic).await;
     }
 
-    /// Ripubblicazione periodica del solo vettore di zeri (lo stato di estop
-    /// resta latched dall'intervento iniziale).
+    /// Periodic re-publication of the vector of zeros only (the estop state
+    /// stays latched from the initial intervention).
     async fn reassert_zeros(&self, cmd_topic: &str, zero_bytes: &[u8]) {
         if let Err(e) = self.session.put(cmd_topic, zero_bytes.to_vec()).await {
-            eprintln!("[HARD-WATCHDOG] Invio zeri a {}: {}", cmd_topic, e);
+            eprintln!("[HARD-WATCHDOG] Sending zeros to {}: {}", cmd_topic, e);
         }
     }
 
-    /// Rilascia il latch di sicurezza quando l'heartbeat torna regolare.
+    /// Releases the safety latch when the heartbeat returns to normal.
     async fn release_estop(&self, estop_topic: &str) {
         if let Err(e) = self.session.put(estop_topic, vec![0u8]).await {
-            eprintln!("[HARD-WATCHDOG] Rilascio estop a {}: {}", estop_topic, e);
+            eprintln!("[HARD-WATCHDOG] Releasing estop on {}: {}", estop_topic, e);
         }
     }
 
@@ -271,13 +271,13 @@ impl HardWatchdog {
             .put(status_topic, status.to_string().into_bytes())
             .await
         {
-            eprintln!("[HARD-WATCHDOG] Pubblicazione stato watchdog: {}", e);
+            eprintln!("[HARD-WATCHDOG] Watchdog status publication: {}", e);
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Priorità del thread dedicato: THREAD_PRIORITY_TIME_CRITICAL su Windows
+// Dedicated thread priority: THREAD_PRIORITY_TIME_CRITICAL on Windows
 // ---------------------------------------------------------------------------
 #[cfg(target_os = "windows")]
 #[link(name = "kernel32")]
@@ -297,8 +297,8 @@ fn boost_thread_priority() {
 
 #[cfg(not(target_os = "windows"))]
 fn boost_thread_priority() {
-    // Su POSIX la priorità real-time richiede privilegi dedicati (SCHED_RR) e
-    // `std::thread::Builder` non offre l'hook: qui resta un no-op voluto.
+    // On POSIX real-time priority requires dedicated privileges (SCHED_RR) and
+    // `std::thread::Builder` offers no hook: this remains a deliberate no-op.
 }
 
 #[cfg(test)]
@@ -321,10 +321,10 @@ mod tests {
 
         std::thread::sleep(Duration::from_millis(15));
         let age = hb.age_ms();
-        assert!(age >= 15, "l'heartbeat deve invecchiare: età {}", age);
+        assert!(age >= 15, "heartbeat must age: age {}", age);
 
         hb.ping();
-        assert!(hb.age_ms() <= 1, "il ping deve azzerare l'età");
+        assert!(hb.age_ms() <= 1, "ping must reset the age");
     }
 
     #[test]

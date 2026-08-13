@@ -4,19 +4,19 @@ use crate::io_bridge::adapters::{BrandAdapter, FrameStrategy};
 use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 use crate::io_bridge::robot_brand::RobotBrand;
 
-/// Codec Comau — bridge socket **PDL2**.
+/// Comau codec — **PDL2** socket bridge.
 ///
-/// Comau non espone un protocollo binario pubblico: i controllori C5G/C6G
-/// dialogano via programmi PDL2 con socket custom. Questo codec usa un
-/// protocollo testuale deterministico (valori float separati da virgola,
-/// frame terminati da newline) che un programma PDL2 può leggere/scrivere
-/// con le primitive `SOCKETRECV`/`SOCKETSEND`:
+/// Comau does not expose a public binary protocol: the C5G/C6G controllers
+/// talk over custom sockets using PDL2 programs. This codec uses a
+/// deterministic textual protocol (comma-separated float values, frames
+/// terminated by newline) that a PDL2 program can read/write with the
+/// `SOCKETRECV`/`SOCKETSEND` primitives:
 /// ```text
 /// 0.1234,-1.5708,3.1416,0.0,0.0,0.0
 /// ```
-/// Telemetria in ingresso e comandi in uscita condividono lo stesso formato;
-/// il senso (robot→SONNY per lo stato, SONNY→robot per i comandi) è definito
-/// dal programma PDL2 di sorveglianza.
+/// Incoming telemetry and outgoing commands share the same format; the
+/// direction (robot→SONNY for state, SONNY→robot for commands) is defined
+/// by the supervising PDL2 program.
 pub struct ComauPdl2;
 
 const COMAU_JOINTS: usize = 6;

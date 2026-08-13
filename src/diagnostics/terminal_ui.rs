@@ -5,8 +5,8 @@ use tokio::time::sleep;
 const BAR_WIDTH: usize = 16;
 const MAX_WARNINGS: usize = 8;
 
-/// Stato condiviso tra il task di sottoscrizione telemetria/status e il
-/// render loop: aggiornato senza blocchi dal loop del bus, letto a 5 Hz.
+/// State shared between the telemetry/status subscription task and the
+/// render loop: updated without blocking by the bus loop, read at 5 Hz.
 #[derive(Debug, Clone)]
 pub struct JointView {
     pub name: String,
@@ -29,7 +29,7 @@ pub struct UiState {
 }
 
 impl UiState {
-    fn new(joint_names: &[String], joint_limits: &[(f32, f32)]) -> Self {
+    pub fn new(joint_names: &[String], joint_limits: &[(f32, f32)]) -> Self {
         let default_range = (-std::f32::consts::PI, std::f32::consts::PI);
         let joints = joint_names
             .iter()
@@ -57,7 +57,7 @@ impl UiState {
         }
     }
 
-    fn push_warning(&mut self, msg: String) {
+    pub fn push_warning(&mut self, msg: String) {
         self.warnings.insert(0, msg);
         self.warnings.truncate(MAX_WARNINGS);
     }
@@ -89,10 +89,17 @@ impl TerminalUi {
         }
     }
 
-    /// Avvia il task di aggiornamento dati e il loop di rendering a 5 Hz.
+    /// Starts the data update task and the 5 Hz rendering loop.
     pub async fn start_render_loop(&self) {
-        println!("[DIAGNOSTICS] Avvio interfaccia Terminal UI di SONNY...");
+        println!("[DIAGNOSTICS] Starting SONNY Terminal UI...");
 
+        let state = self.spawn_updater();
+        self.render_loop(state, Duration::from_millis(200)).await;
+    }
+
+    /// Creates the shared dashboard state and starts the task that feeds it
+    /// by subscribing to telemetry/status on the Zenoh bus.
+    pub fn spawn_updater(&self) -> Arc<Mutex<UiState>> {
         let state = Arc::new(Mutex::new(UiState::new(
             &self.joint_names,
             &self.joint_limits,
@@ -104,14 +111,19 @@ impl TerminalUi {
             updater.run_telemetry_updater(updater_state).await;
         });
 
+        state
+    }
+
+    /// Dashboard rendering loop with the requested refresh period.
+    pub async fn render_loop(&self, state: Arc<Mutex<UiState>>, interval: Duration) {
         loop {
             self.render(&state);
-            sleep(Duration::from_millis(200)).await;
+            sleep(interval).await;
         }
     }
 
     // -----------------------------------------------------------------------
-    // Task di aggiornamento dati dal bus
+    // Data update task from the bus
     // -----------------------------------------------------------------------
     async fn run_telemetry_updater(&self, state: Arc<Mutex<UiState>>) {
         let telemetry_topic = "alpha/telemetry/*";
@@ -120,14 +132,14 @@ impl TerminalUi {
         let telemetry_sub = match self.session.declare_subscriber(telemetry_topic).await {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("[UI] Subscriber telemetria fallito: {}", e);
+                eprintln!("[UI] Telemetry subscriber failed: {}", e);
                 return;
             }
         };
         let status_sub = match self.session.declare_subscriber(status_topic).await {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("[UI] Subscriber status fallito: {}", e);
+                eprintln!("[UI] Status subscriber failed: {}", e);
                 return;
             }
         };
@@ -187,8 +199,8 @@ impl TerminalUi {
         let now = Instant::now();
         if let Some(last) = state.last_frame_at {
             let interval_us = now.duration_since(last).as_micros() as u64;
-            // Guard anti-burst: sample consegnati in raffica dal bus non sono
-            // intervalli reali di telemetria e andrebbero a sporcare la stima.
+            // Anti-burst guard: samples delivered in bursts by the bus are not
+            // real telemetry intervals and would pollute the estimate.
             if interval_us >= 500 {
                 state.last_interval_us = Some(interval_us);
                 if interval_us > state.max_jitter_us {
@@ -231,7 +243,7 @@ impl TerminalUi {
     // -----------------------------------------------------------------------
     // Rendering
     // -----------------------------------------------------------------------
-    fn render(&self, state: &Arc<Mutex<UiState>>) {
+    pub fn render(&self, state: &Arc<Mutex<UiState>>) {
         let state = state.lock().unwrap();
 
         print!("{}[2J{}[H", 27 as char, 27 as char);
@@ -262,13 +274,13 @@ impl TerminalUi {
             Some(us) => (1_000_000.0 / us as f64, us as f64 / 1000.0),
             None => (0.0, 0.0),
         };
-        println!(" TELEMETRY RATE:   {:.1} Hz (atteso {:.1}) | intervallo {:.2} ms | jitter max {:.2} ms",
+        println!(" TELEMETRY RATE:   {:.1} Hz (expected {:.1}) | interval {:.2} ms | max jitter {:.2} ms",
             hz, self.expected_hz, interval_ms, state.max_jitter_us as f64 / 1000.0);
-        println!(" FRAMES RICEVUTI:  {}", state.frames);
+        println!(" FRAMES RECEIVED:  {}", state.frames);
         println!("----------------------------------------------------");
 
         if state.joints.is_empty() {
-            println!(" (nessuna telemetria ricevuta ancora)");
+            println!(" (no telemetry received yet)");
         }
         for joint in &state.joints {
             let bar = Self::joint_bar(joint);
@@ -277,11 +289,11 @@ impl TerminalUi {
 
         println!("----------------------------------------------------");
         println!(
-            " COMANDI:   alpha/cmd/{}        (f32 LE x DOF)",
+            " COMMANDS:   alpha/cmd/{}        (f32 LE x DOF)",
             self.robot_name
         );
         println!(
-            " ESTOP:     alpha/cmd/{}/estop (1 = attivo)",
+            " ESTOP:     alpha/cmd/{}/estop (1 = active)",
             self.robot_name
         );
         println!("====================================================");
@@ -290,7 +302,7 @@ impl TerminalUi {
             println!(" [WARN] {}", warning);
         }
         if state.warnings.is_empty() {
-            println!(" NESSUN ALLARME");
+            println!(" NO ALARMS");
         }
         println!("====================================================\n");
     }

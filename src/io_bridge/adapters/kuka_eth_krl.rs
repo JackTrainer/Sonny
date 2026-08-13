@@ -4,22 +4,22 @@ use crate::io_bridge::adapters::{BrandAdapter, FrameStrategy};
 use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 use crate::io_bridge::robot_brand::RobotBrand;
 
-/// Codec KUKA via **Ethernet KRL** (EKI): XML su TCP, porta 7911 del KRC.
+/// KUKA codec over **Ethernet KRL** (EKI): XML on TCP, port 7911 of the KRC.
 ///
-/// Telemetria (KUKA → SONNY): gli array del programma KRL vengono esposti
-/// come variabili `SEND[n]`:
+/// Telemetry (KUKA → SONNY): the KRL program arrays are exposed as `SEND[n]`
+/// variables:
 /// ```xml
 /// <?xml version="1.0" encoding="UTF-8"?><Rob><Data>
 ///   <Var Name="SEND[1]">-0.1234</Var><Var Name="SEND[2]">1.5708</Var>
 /// </Data></Rob>
 /// ```
-/// Comandi (SONNY → KUKA): variabili `A[n]` lette dal lato KRL:
+/// Commands (SONNY → KUKA): `A[n]` variables read on the KRL side:
 /// ```xml
 /// <?xml version="1.0" encoding="UTF-8"?><Rob><Data>
 ///   <Var Name="CMD">SONNY</Var><Var Name="A1">0.0000</Var>
 /// </Data></Rob>
 /// ```
-/// Il programma KRL deve dichiarare gli array `SEND[]` e `A[]` nel config EKI.
+/// The KRL program must declare the `SEND[]` and `A[]` arrays in the EKI config.
 pub struct KukaEthernetKrl;
 
 const XML_HEADER: &[u8] = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?><Rob><Data>";
@@ -87,7 +87,7 @@ impl BrandAdapter for KukaEthernetKrl {
     }
 }
 
-/// Buffer di scrittura senza allocazione sull'heap.
+/// Write buffer without heap allocation.
 struct SliceWriter<'a> {
     buf: &'a mut [u8],
     pos: usize,
@@ -113,7 +113,7 @@ struct ParsedVar<'a> {
     next_offset: usize,
 }
 
-/// Estrae un elemento `<Var Name="...">value</Var>` a partire da `from`.
+/// Extracts a `<Var Name="...">value</Var>` element starting at `from`.
 fn parse_var(body: &[u8], from: usize) -> Option<ParsedVar<'_>> {
     let name_tag = b"<Var Name=\"";
     let start = find_from(body, name_tag, from)?;

@@ -56,9 +56,9 @@ impl VirtualHardwareMock {
         let interval = Duration::from_millis(10);
         let mut next_tick = Instant::now();
 
-        // Pre-allocazione all'avvio del robot: StateVector e buffer di
-        // serializzazione creati UNA volta e riutilizzati a ogni tick.
-        // Durante il loop a 100 Hz non avviene alcuna allocazione dinamica.
+        // Pre-allocation at robot startup: StateVector and serialization buffer
+        // created ONCE and reused every tick.
+        // No dynamic allocation takes place during the 100 Hz loop.
         let mut state = StateVector::new(&self.hardware_id, &[]);
         let mut tx_buf = [0u8; MAX_JOINTS * 4];
 
@@ -68,7 +68,7 @@ impl VirtualHardwareMock {
                     let active = self.joint_count.min(MAX_JOINTS);
                     for j in 0..active {
                         let val = if command_received {
-                            // Convergenza veloce verso il target di comando.
+                            // Fast convergence toward the command target.
                             let c = current[j] + (targets[j] - current[j]) * 0.2;
                             current[j] = c;
                             c
@@ -101,7 +101,7 @@ impl VirtualHardwareMock {
                                 for (t, v) in targets.iter_mut().zip(command.as_slice()) {
                                     *t = *v;
                                 }
-                                println!("[MOCK] Comando ricevuto: {:?}", command.as_slice());
+                                println!("[MOCK] Command received: {:?}", command.as_slice());
                             }
                         }
                     }
@@ -115,7 +115,7 @@ impl VirtualHardwareMock {
                             current = [0.0f32; MAX_JOINTS];
                             println!(
                                 "[MOCK] ESTOP {}",
-                                if estop { "ATTIVO" } else { "disattivato" }
+                                if estop { "ENGAGED" } else { "released" }
                             );
                             self.publish_status(&status_topic, frames, estop).await?;
                         }

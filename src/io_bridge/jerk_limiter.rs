@@ -1,20 +1,20 @@
 use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 
-/// Limitatore di shock meccanico: limita la **derivata terza** (jerk) della
-/// curva di comando.
+/// Mechanical shock limiter: limits the **third derivative** (jerk) of the
+/// command curve.
 ///
-/// Anche se una traiettoria calcolata resta dentro i limiti geometrici (es.
-/// la pinza si sposta da X=0 a X=10), se lo spostamento avviene troppo
-/// velocemente in un singolo tick, l'accelerazione improvvisa dà una frustata
-/// meccanica ai giunti, usurandoli o spezzando l'oggetto preso.
+/// Even if a computed trajectory stays within the geometric limits (e.g.
+/// the gripper moves from X=0 to X=10), if the displacement happens too
+/// fast in a single tick, the sudden acceleration lashes the joints
+/// mechanically, wearing them out or breaking the held object.
 ///
-/// Questo modulo applica una catena di saturazione del terzo ordine su ogni
-/// giunto: se la variazione di accelerazione tra il frame N e il frame N-1
-/// supera la tolleranza fisica della macchina (`max_jerk`), la curva viene
-/// smussata e rallentata matematicamente prima della spedizione all'HAL.
+/// This module applies a third-order saturation chain on every
+/// joint: if the acceleration variation between frame N and frame N-1
+/// exceeds the machine's physical tolerance (`max_jerk`), the curve is
+/// mathematically smoothed and slowed before dispatch to the HAL.
 ///
-/// Tutto vive in array statici pre-allocati: nessuna allocazione durante il
-/// loop di controllo.
+/// Everything lives in pre-allocated static arrays: no allocation during the
+/// control loop.
 pub struct JerkLimiter {
     dt: f32,
     prev_pos: [f32; MAX_JOINTS],
@@ -26,9 +26,9 @@ pub struct JerkLimiter {
 }
 
 impl JerkLimiter {
-    /// Crea il limitatore con periodo di campionamento `dt` (secondi). I
-    /// limiti partono da `+∞`: finché non vengono configurati con
-    /// [`JerkLimiter::set_limits`], il passaggio dei comandi è trasparente.
+    /// Creates the limiter with sampling period `dt` (seconds). The
+    /// limits start at `+∞`: until configured with
+    /// [`JerkLimiter::set_limits`], command pass-through is transparent.
     pub const fn new(dt: f32) -> Self {
         let dt = if dt > 0.0 { dt } else { 0.01 };
         Self {
@@ -42,21 +42,21 @@ impl JerkLimiter {
         }
     }
 
-    /// Configura le tolleranze fisiche per giunto, in rad/s, rad/s² e rad/s³.
-    /// Le fette possono essere più corte di `MAX_JOINTS`: i giunti mancanti
-    /// restano senza limite (passaggio trasparente).
+    /// Configures the physical tolerances per joint, in rad/s, rad/s² and rad/s³.
+    /// The slices may be shorter than `MAX_JOINTS`: the missing joints
+    /// remain unlimited (transparent pass-through).
     pub fn set_limits(&mut self, max_vel: &[f32], max_acc: &[f32], max_jerk: &[f32]) {
         copy_limit(&mut self.max_vel, max_vel);
         copy_limit(&mut self.max_acc, max_acc);
         copy_limit(&mut self.max_jerk, max_jerk);
     }
 
-    /// Smussa la curva di comando *in-place*.
+    /// Smoothes the command curve *in-place*.
     ///
-    /// Per ogni giunto: la velocità è limitata a `max_vel`, l'accelerazione a
-    /// `max_acc` e la **variazione di accelerazione tra frame N e N-1** (cioè
-    /// il jerk) a `max_jerk`. Il risultato viene re-clampato ai limiti
-    /// geometrici `limits` come rete di sicurezza finale.
+    /// For each joint: the velocity is limited to `max_vel`, the acceleration to
+    /// `max_acc` and the **acceleration variation between frames N and N-1** (i.e.
+    /// the jerk) to `max_jerk`. The result is re-clamped to the geometric
+    /// `limits` as a final safety net.
     pub fn limit(&mut self, command: &mut CommandVector, limits: &[(f32, f32)]) {
         let n = command.len.min(MAX_JOINTS);
         let dt = self.dt;
@@ -68,10 +68,10 @@ impl JerkLimiter {
 
             let dist = target - self.prev_pos[i];
 
-            // Costante di tempo dell'avvicinamento: abbastanza grande perché i
-            // limiti di accelerazione e jerk riescano a inseguire la richiesta
-            // senza overshoot. Con limiti assenti (`+∞`) vale `dt` e la
-            // richiesta è trasparente (il target viene raggiunto in un tick).
+            // Approach time constant: large enough for the
+            // acceleration and jerk limits to track the demand
+            // without overshoot. With no limits (`+∞`) it equals `dt` and the
+            // demand is transparent (the target is reached in one tick).
             let tau = {
                 let from_vel = if vmax.is_finite() && amax.is_finite() {
                     vmax / amax
@@ -86,10 +86,10 @@ impl JerkLimiter {
                 (from_vel + from_jerk).max(dt)
             };
 
-            // Velocità desiderata per avvicinarsi al target, limitata dalla
-            // velocità massima e dalla distanza di frenata disponibile: la
-            // richiesta non può mai eccedere la velocità che consente di
-            // fermarsi entro il target (niente overshoot).
+            // Desired velocity to approach the target, limited by the
+            // maximum velocity and the available braking distance: the
+            // demand can never exceed the velocity that allows
+            // stopping within the target (no overshoot).
             let mut v_des = dist / tau;
             let mut v_lim = vmax;
             if amax.is_finite() {
@@ -100,14 +100,14 @@ impl JerkLimiter {
                 v_des = v_des.clamp(-v_lim, v_lim);
             }
 
-            // Accelerazione desiderata per portarsi alla velocità.
+            // Desired acceleration to reach the velocity.
             let mut a_des = (v_des - self.prev_vel[i]) / dt;
             if amax.is_finite() {
                 a_des = a_des.clamp(-amax, amax);
             }
 
-            // Limite di jerk: la variazione di accelerazione tra il frame N
-            // e il frame N-1 non può superare jmax * dt.
+            // Jerk limit: the acceleration variation between frame N
+            // and frame N-1 cannot exceed jmax * dt.
             let mut a = if jmax.is_finite() {
                 let a_step = jmax * dt;
                 (a_des - self.prev_acc[i]).clamp(-a_step, a_step) + self.prev_acc[i]
@@ -118,14 +118,14 @@ impl JerkLimiter {
                 a = a.clamp(-amax, amax);
             }
 
-            // Integrazione numerica: velocità e posizione smussate.
+            // Numerical integration: smoothed velocity and position.
             let mut v = self.prev_vel[i] + a * dt;
             if vmax.is_finite() {
                 v = v.clamp(-vmax, vmax);
             }
             let mut q = self.prev_pos[i] + v * dt;
 
-            // Clamp geometrico finale: la posizione non esce mai dai limiti.
+            // Final geometric clamp: the position never leaves the limits.
             if let Some((min, max)) = limits.get(i) {
                 q = q.clamp(*min, *max);
             }
@@ -223,7 +223,7 @@ mod tests {
             let jerk = (a_n - a_p).abs() / DT;
             max_jerk = max_jerk.max(jerk);
         }
-        assert!(max_jerk <= 100.0 * 1.05, "jerk {:.3} supera il limite", max_jerk);
+        assert!(max_jerk <= 100.0 * 1.05, "jerk {:.3} exceeds the limit", max_jerk);
     }
 
     #[test]

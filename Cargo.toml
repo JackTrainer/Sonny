@@ -5,40 +5,40 @@ edition = "2021"
 license = "AGPL-3.0-only"
 
 [dependencies]
-# Runtime asincrono per la gestione dei thread real-time
+# Async runtime for real-time thread management
 tokio = { version = "1.0", features = ["full"] }
 
-# Protocollo di rete unificato a bassissima latenza
+# Unified very-low-latency network protocol
 zenoh = { version = "1.0" }
 
-# Parser leggero per i messaggi del ROS2 Bridge (simulato o formati standard)
+# Lightweight parser for ROS2 Bridge messages (simulated or standard formats)
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 
-# Comunicazione seriale RS-232/485 per fieldbus industriali (Modbus RTU, CAN)
+# RS-232/485 serial communication for industrial fieldbuses (Modbus RTU, CAN)
 tokio-serial = { version = "5.4" }
 
-# FFI verso le librerie di sistema per thread affinity e priorità real-time
+# FFI to system libraries for thread affinity and real-time priority
 # (sched_setaffinity, sched_setscheduler/SCHED_FIFO, setpriority)
 libc = "0.2"
 
-# Pinning cross-platform dei thread su core dedicati: il loop di controllo
-# real-time a 100 Hz vive sul Core 1, il runtime Wasmtime sul Core 2.
+# Cross-platform pinning of threads to dedicated cores: the 100 Hz real-time
+# control loop lives on Core 1, the Wasmtime runtime on Core 2.
 core_affinity = "0.8"
 
 # ---------------------------------------------------------------------------
-# Profili di build
+# Build profiles
 # ---------------------------------------------------------------------------
 #
-# Gestione rigida del panico: ABORT immediato, niente unwinding.
-# Di default Rust, davanti a un errore irreversibile, "srotola" la memoria dei
-# thread per tentare di riprendersi: richiede tempo e lascia il robot in uno
-# stato indefinito per diversi millisecondi. In robotica un bug può arrivare
-# mentre i motori stanno eseguendo un movimento: se il software prova a
-# "guarire" da solo rischia movimenti folli degli azionamenti.
+# Hard panic handling: immediate ABORT, no unwinding.
+# By default, when Rust hits an unrecoverable error it "unwinds" the thread
+# memory to try to recover: that takes time and leaves the robot in an
+# undefined state for several milliseconds. In robotics a bug can surface
+# while the motors are executing a motion: if the software tries to "heal"
+# on its own it risks wild drive movements.
 #
-# Con `panic = "abort"` il processo si spegne istantaneamente (~microsecondi),
-# le periferiche vengono lasciate nelle mani dei freni meccanici e l'Hardware
-# Watchdog resta l'unico arbitro di sicurezza del movimento.
+# With `panic = "abort"` the process shuts down instantly (~microseconds),
+# peripherals are left in the hands of the mechanical brakes, and the Hardware
+# Watchdog remains the only safety arbiter of motion.
 [profile.release]
 panic = "abort"

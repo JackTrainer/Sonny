@@ -2,22 +2,22 @@ use crate::io_bridge::adapters::{BrandAdapter, FrameStrategy};
 use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 use crate::io_bridge::robot_brand::RobotBrand;
 
-/// Codec per **piattaforme AMR standard**.
+/// Codec for **standard AMR platforms**.
 ///
-/// Le AMR standard integrano ROS 2 (`/cmd_vel`, `/odom`): la compatibilità
-/// passa dal `ros2_bridge` che converte i topic in vettori SONNY. Sulla rete
-/// SONNY il vettore di giunti della base mobile è **velocità ruote in rad/s**
-/// (differenziale: `[v_left, v_right, ...]`), trasportato con il frame binario
-/// f32 LE nativo (stesso formato del profilo generico).
+/// Standard AMRs integrate ROS 2 (`/cmd_vel`, `/odom`): compatibility goes
+/// through the `ros2_bridge` that converts the topics into SONNY vectors. On
+/// the SONNY network the mobile base joint vector is **wheel speeds in rad/s**
+/// (differential: `[v_left, v_right, ...]`), carried with the native binary
+/// f32 LE frame (same format as the generic profile).
 ///
-/// Le funzioni [`twist_to_wheel_speeds`] e [`wheel_speeds_to_twist`]
-/// implementano il mapping differenziale standard `Twist ⇄ ruote` usato dal
-/// bridge ROS2, così una AMR si pilota in termini di `linear.x`/`angular.z`
-/// mentre sul bus SONNY viaggiano le velocità delle ruote.
+/// The [`twist_to_wheel_speeds`] and [`wheel_speeds_to_twist`] functions
+/// implement the standard differential `Twist ⇄ wheels` mapping used by the
+/// ROS2 bridge, so an AMR is driven in terms of `linear.x`/`angular.z`
+/// while wheel speeds travel on the SONNY bus.
 #[derive(Default)]
 pub struct AmrRos2;
 
-/// Interasse predefinito [m] per il mapping differenziale.
+/// Default wheel base [m] for the differential mapping.
 pub const DEFAULT_WHEEL_BASE_M: f32 = 0.5;
 
 impl BrandAdapter for AmrRos2 {
@@ -56,10 +56,10 @@ impl BrandAdapter for AmrRos2 {
     }
 }
 
-/// Mapping `Twist (v, ω) → velocità ruote (rad/s)` per base differenziale.
+/// `Twist (v, ω) → wheel speeds (rad/s)` mapping for a differential base.
 ///
-/// `v` velocità lineare lungo x, `ω` velocità angolare attorno a z,
-/// `wheel_base` interasse in metri.
+/// `v` linear speed along x, `ω` angular speed around z,
+/// `wheel_base` wheel base in meters.
 pub fn twist_to_wheel_speeds(linear: f32, angular: f32, wheel_base: f32) -> (f32, f32) {
     if wheel_base <= 0.0 {
         return (linear, linear);
@@ -68,7 +68,7 @@ pub fn twist_to_wheel_speeds(linear: f32, angular: f32, wheel_base: f32) -> (f32
     (linear - half, linear + half)
 }
 
-/// Mapping inverso `velocità ruote → Twist (v, ω)`.
+/// Inverse mapping `wheel speeds → Twist (v, ω)`.
 pub fn wheel_speeds_to_twist(left: f32, right: f32, wheel_base: f32) -> (f32, f32) {
     let v = (left + right) / 2.0;
     let omega = if wheel_base <= 0.0 {

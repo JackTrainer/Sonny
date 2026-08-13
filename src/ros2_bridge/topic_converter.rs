@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 pub async fn start_bridge(session: Arc<zenoh::Session>) {
-    println!("[ROS2 BRIDGE] Modulo di conversione topic ROS2 avviato.");
+    println!("[ROS2 BRIDGE] ROS2 topic conversion module started.");
 
     let subscriber = match session.declare_subscriber("rt/joint_states").await {
         Ok(sub) => sub,

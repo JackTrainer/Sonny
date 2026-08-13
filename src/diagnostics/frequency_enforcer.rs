@@ -7,21 +7,21 @@ use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 use crate::io_bridge::vector_sanitizer::VectorSanitizer;
 use crate::io_bridge::watchdog_timer::Heartbeat;
 
-/// Core dedicato al loop di controllo real-time a 100 Hz.
+/// Core dedicated to the 100 Hz real-time control loop.
 ///
-/// Su questo core vivono la lettura del buffer lock-free, il
-/// [`VectorSanitizer`] e la pubblicazione del comando verso l'HAL: nessun
-/// altro thread condiviso, cache dati calda, zero cambi di contesto.
+/// This core hosts the lock-free buffer reads, the [`VectorSanitizer`] and
+/// the publication of the command to the HAL: no other shared thread, warm
+/// data cache, zero context switches.
 pub const RT_CONTROL_CORE: usize = 1;
 
-/// Core dedicato al runtime Wasmtime.
+/// Core dedicated to the Wasmtime runtime.
 ///
-/// Il sandbox WASM esegue in isolamento su questo core: anche se una Skill di
-/// terze parti impiega centinaia di microsecondi, il Core 1 non lo aspetta
-/// mai perché legge dal buffer lock-free.
+/// The WASM sandbox runs in isolation on this core: even if a third-party
+/// Skill takes hundreds of microseconds, Core 1 never waits on it because it
+/// reads from the lock-free buffer.
 pub const WASM_RUNTIME_CORE: usize = 2;
 
-/// Rapporto di sfasamento rispetto al periodo teorico del frame di controllo.
+/// Phase deviation report relative to the theoretical control frame period.
 #[derive(Debug, Clone, Copy)]
 pub struct JitterReport {
     pub expected_us: u64,
@@ -30,7 +30,7 @@ pub struct JitterReport {
 }
 
 impl JitterReport {
-    /// Deviazione percentuale rispetto al periodo teorico.
+    /// Percentage deviation relative to the theoretical period.
     pub fn deviation_pct(&self) -> u64 {
         if self.expected_us == 0 {
             0
@@ -39,7 +39,7 @@ impl JitterReport {
         }
     }
 
-    /// Sfasamento quantificato in millisecondi.
+    /// Phase deviation quantified in milliseconds.
     pub fn jitter_ms(&self) -> f64 {
         self.diff_us as f64 / 1000.0
     }
@@ -81,7 +81,7 @@ impl FrequencyEnforcer {
                 let elapsed_us = now.duration_since(last).as_micros() as u64;
                 if let Some(report) = self.analyze_interval(elapsed_us) {
                     eprintln!(
-                        "[WARN][frequency_enforcer] Jitter superato sul nodo {}: intervallo atteso {} us, misurato {} us, differenza {} us",
+                        "[WARN][frequency_enforcer] Jitter exceeded on node {}: expected interval {} us, measured {} us, difference {} us",
                         self.hardware_id,
                         report.expected_us,
                         report.measured_us,
@@ -96,19 +96,19 @@ impl FrequencyEnforcer {
         Ok(())
     }
 
-    /// Analisi pura dell'intervallo tra due frame successivi usando l'orologio
-    /// ad alta precisione della CPU: calcola la differenza rispetto al periodo
-    /// teorico e, se supera la soglia di tolleranza industriale, restituisce il
-    /// rapporto di jitter. Non blocca mai il programma: il chiamante decide.
+    /// Pure analysis of the interval between two successive frames using the
+    /// CPU high-precision clock: computes the difference against the theoretical
+    /// period and, if it exceeds the industrial tolerance threshold, returns the
+    /// jitter report. Never blocks the program: the caller decides.
     pub fn analyze_interval(&self, elapsed_us: u64) -> Option<JitterReport> {
         compute_jitter(self.expected_interval_us, self.max_jitter_us, elapsed_us)
     }
 }
 
-/// Calcolo puro del rapporto di jitter rispetto al periodo teorico.
+/// Pure computation of the jitter report relative to the theoretical period.
 ///
-/// Separato dal chiamante così il nucleo di analisi è testabile senza sessioni
-/// di rete: nessuna allocazione, nessun I/O, pensato per girare sul Core 1.
+/// Kept separate from the caller so the analysis core is testable without
+/// network sessions: no allocation, no I/O, designed to run on Core 1.
 pub fn compute_jitter(
     expected_interval_us: u64,
     max_jitter_us: u64,
@@ -127,23 +127,23 @@ pub fn compute_jitter(
 }
 
 // ---------------------------------------------------------------------------
-// Buffer circolare lock-free a capacità 1 (ultimo valore vince)
+// Lock-free circular buffer with capacity 1 (last value wins)
 // ---------------------------------------------------------------------------
 
-/// Registro lock-free a singolo slot: il produttore (WASM, Core 2) pubblica
-/// l'ultimo vettore di coordinate geometriche, il consumatore (loop real-time,
-/// Core 1) lo legge senza mai bloccarsi.
+/// Single-slot lock-free register: the producer (WASM, Core 2) publishes the
+/// latest geometric coordinate vector, the consumer (real-time loop, Core 1)
+/// reads it without ever blocking.
 ///
-/// La capacità è 1 per design: un buffer più profondo aggiungerebbe latenza
-/// tra la Skill e i motori. Con un solo slot, se il produttore è più veloce
-/// del loop il valore più recente vince; se il produttore è in ritardo (picco
-/// di overhead del runtime Wasmtime), il consumatore trova lo slot vuoto e
-/// riusa l'ultimo vettore valido: il ciclo a 100 Hz non salta mai un frame e
-/// l'heartbeat al watchdog non ha mai buchi.
+/// Capacity is 1 by design: a deeper buffer would add latency between the
+/// Skill and the motors. With a single slot, if the producer is faster than
+/// the loop the newest value wins; if the producer is late (peak Wasmtime
+/// runtime overhead), the consumer finds an empty slot and reuses the last
+/// valid vector: the 100 Hz loop never skips a frame and the watchdog
+/// heartbeat never has gaps.
 ///
-/// La sincronizzazione è un singolo `AtomicPtr`: `AcqRel` su entrambe le
-/// operazioni garantisce che i dati scritti dal produttore siano visibili al
-/// consumatore. Ogni puntatore vive in esattamente una delle due parti.
+/// Synchronization is a single `AtomicPtr`: `AcqRel` on both operations
+/// guarantees that data written by the producer is visible to the consumer.
+/// Each pointer lives in exactly one of the two sides.
 pub struct LatestCommand {
     slot: AtomicPtr<CommandVector>,
 }
@@ -155,9 +155,9 @@ impl LatestCommand {
         }
     }
 
-    /// Pubblicazione non bloccante dell'ultimo comando prodotto dal sandbox.
-    /// Il vecchio valore, se presente, viene rilasciato qui dal produttore:
-    /// il consumatore non può più possederlo perché è stato rimosso dallo slot.
+    /// Non-blocking publication of the latest command produced by the sandbox.
+    /// The old value, if present, is released here by the producer: the
+    /// consumer can no longer own it because it has been removed from the slot.
     pub fn publish(&self, cmd: CommandVector) {
         let new = Box::into_raw(Box::new(cmd));
         let old = self.slot.swap(new, Ordering::AcqRel);
@@ -166,9 +166,9 @@ impl LatestCommand {
         }
     }
 
-    /// Lettura non bloccante: restituisce l'ultimo comando pubblicato oppure
-    /// `fallback` se il produttore è in ritardo. Il consumatore svuota lo slot
-    /// così il frame successivo riparte dall'ultimo valore valido.
+    /// Non-blocking read: returns the latest published command or `fallback`
+    /// if the producer is late. The consumer empties the slot so the next
+    /// frame starts again from the last valid value.
     pub fn take_or(&self, fallback: CommandVector) -> CommandVector {
         let ptr = self.slot.swap(ptr::null_mut(), Ordering::AcqRel);
         if ptr.is_null() {
@@ -178,7 +178,7 @@ impl LatestCommand {
         }
     }
 
-    /// Lettura non bloccante opzionale: `None` se lo slot è vuoto.
+    /// Optional non-blocking read: `None` if the slot is empty.
     pub fn take(&self) -> Option<CommandVector> {
         let ptr = self.slot.swap(ptr::null_mut(), Ordering::AcqRel);
         if ptr.is_null() {
@@ -196,22 +196,22 @@ impl Default for LatestCommand {
 }
 
 // ---------------------------------------------------------------------------
-// Loop di controllo real-time a 100 Hz (Core 1)
+// 100 Hz real-time control loop (Core 1)
 // ---------------------------------------------------------------------------
 
-/// Ciclo di comando ad alta frequenza isolato sul Core 1.
+/// High-frequency command loop isolated on Core 1.
 ///
-/// Ad ogni tick da 10 ms il loop, senza attendere mai il runtime WASM:
+/// On every 10 ms tick the loop, without ever waiting on the WASM runtime:
 ///
-/// 1. legge l'ultimo vettore dal buffer lock-free (o riusa l'ultimo valido);
-/// 2. sanifica il vettore con [`VectorSanitizer`] (NaN/Inf/clamp);
-/// 3. batte l'heartbeat verso l'Hard-Watchdog → mai uno scatto indebito;
-/// 4. pubblica il comando verso l'HAL su Zenoh;
-/// 5. misura lo jitter del frame rispetto al periodo teorico.
+/// 1. reads the latest vector from the lock-free buffer (or reuses the last valid one);
+/// 2. sanitizes the vector with [`VectorSanitizer`] (NaN/Inf/clamp);
+/// 3. beats the heartbeat to the Hard-Watchdog → never an unintended trip;
+/// 4. publishes the command to the HAL over Zenoh;
+/// 5. measures the frame jitter against the theoretical period.
 ///
-/// Il thread possiede un runtime Tokio mono-thread privato: è il kernel a
-/// schedularlo sul Core 1, con la cache calda, e nessun'altra task gli ruba
-/// tempo.
+/// The thread owns a private single-threaded Tokio runtime: the kernel
+/// schedules it on Core 1 with a warm cache, and no other task steals time
+/// from it.
 pub struct RealTimeControlLoop {
     session: Arc<zenoh::Session>,
     hardware_id: String,
@@ -253,19 +253,19 @@ impl RealTimeControlLoop {
         }
     }
 
-    /// Avvia il thread dedicato del loop e lo vincola al Core 1.
+    /// Starts the dedicated loop thread and pins it to Core 1.
     pub fn start(self) -> std::io::Result<std::thread::JoinHandle<()>> {
         let handle = std::thread::Builder::new()
             .name("rt-control-100hz".into())
             .spawn(move || {
                 if core_affinity::set_for_current(core_affinity::CoreId { id: self.core }) {
                     println!(
-                        "[RT] Loop di controllo a 100 Hz pinnato sul Core {}.",
+                        "[RT] 100 Hz control loop pinned to Core {}.",
                         self.core
                     );
                 } else {
                     eprintln!(
-                        "[WARN - RT] Pinning del loop sul Core {} non riuscito.",
+                        "[WARN - RT] Failed to pin the loop to Core {}.",
                         self.core
                     );
                 }
@@ -276,7 +276,7 @@ impl RealTimeControlLoop {
                 {
                     Ok(rt) => rt,
                     Err(e) => {
-                        eprintln!("[RT] Runtime dedicato non disponibile: {}", e);
+                        eprintln!("[RT] Dedicated runtime unavailable: {}", e);
                         return;
                     }
                 };
@@ -289,8 +289,8 @@ impl RealTimeControlLoop {
         let cmd_topic = format!("alpha/cmd/{}", self.hardware_id);
         let period_ms = (self.enforcer.expected_interval_us / 1000).max(1);
 
-        // Ultimo vettore valido: se lo slot è vuoto viene riusato tale e
-        // quale, quindi la catena cinematica non vede mai un buco.
+        // Last valid vector: if the slot is empty it is reused as-is, so the
+        // kinematic chain never sees a gap.
         let mut last_valid = CommandVector::zeros(self.joint_count);
 
         let mut ticker = tokio::time::interval(Duration::from_millis(period_ms));
@@ -300,28 +300,28 @@ impl RealTimeControlLoop {
             ticker.tick().await;
             let t0 = Instant::now();
 
-            // 1. Lettura non bloccante: WASM in ritardo? → ultimo valido.
+            // 1. Non-blocking read: WASM late? → last valid.
             let mut cmd = self.buffer.take_or(last_valid);
 
-            // 2. Sanitizzazione sul Core 1 (NaN/Inf ripristino, clamp fisico).
+            // 2. Sanitization on Core 1 (NaN/Inf recovery, physical clamp).
             self.sanitizer.sanitize_and_clamp(&mut cmd, &self.limits);
             last_valid = cmd;
 
-            // 3. Heartbeat: il watchdog non vede mai un frame mancante.
+            // 3. Heartbeat: the watchdog never sees a missing frame.
             self.heartbeat.ping();
 
-            // 4. Pubblicazione del comando verso l'HAL.
+            // 4. Publication of the command to the HAL.
             let mut buf = [0u8; MAX_JOINTS * 4];
             let n = cmd.write_to(&mut buf);
             if let Err(e) = self.session.put(&cmd_topic, buf[..n].to_vec()).await {
-                eprintln!("[RT] Invio comando a {}: {}", cmd_topic, e);
+                eprintln!("[RT] Sending command to {}: {}", cmd_topic, e);
             }
 
-            // 5. Jitter del frame rispetto al periodo teorico.
+            // 5. Frame jitter against the theoretical period.
             let elapsed_us = t0.elapsed().as_micros() as u64;
             if let Some(report) = self.enforcer.analyze_interval(elapsed_us) {
                 eprintln!(
-                    "[WARN - RT] Frame fuori finestra: atteso {} us, misurato {} us (deviazione {}%)",
+                    "[WARN - RT] Frame out of window: expected {} us, measured {} us (deviation {}%)",
                     report.expected_us,
                     report.measured_us,
                     report.deviation_pct(),
@@ -351,9 +351,9 @@ mod tests {
         assert_eq!(
             buf.take().unwrap().as_slice(),
             &[0.5, -0.5][..],
-            "il primo take deve restituire il comando pubblicato"
+            "first take must return the published command"
         );
-        assert!(buf.take().is_none(), "il secondo take deve trovare slot vuoto");
+        assert!(buf.take().is_none(), "second take must find an empty slot");
     }
 
     #[test]

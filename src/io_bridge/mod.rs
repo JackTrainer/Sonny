@@ -1,5 +1,6 @@
 pub mod adapters;
 pub mod command_vector;
+pub mod failsafe;
 pub mod hal_loader;
 pub mod hardware_abstraction;
 pub mod jerk_limiter;

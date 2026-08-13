@@ -13,14 +13,14 @@ impl TelemetryLogger {
         }
     }
 
-    /// Registra il vettore di stato in un file di log locale in modo asincrono
+    /// Logs the state vector to a local log file asynchronously
     pub fn log_state(&self, state: &StateVector) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.file_path)?;
 
-        // Formatta i dati in una stringa JSON compatta per non pesare sulla CPU
+        // Formats the data into a compact JSON string to avoid loading the CPU
         let log_line = format!(
             "{{\"timestamp\":{},\"hardware\":\"{}\",\"values\":{:?}}}\n",
             state.timestamp,

@@ -2,9 +2,9 @@ use crate::io_bridge::adapters::{BrandAdapter, FrameStrategy};
 use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 use crate::io_bridge::robot_brand::RobotBrand;
 
-/// Codec Franka Emika — **FCI** (Franka Control Interface), UDP 30401.
+/// Franka Emika codec — **FCI** (Franka Control Interface), UDP 30401.
 ///
-/// La telemetria è il `RobotState` FCI (documentazione libfranka):
+/// The telemetry is the FCI `RobotState` (libfranka documentation):
 /// ```text
 /// uint32  message_size      (big-endian)
 /// double  time              (offset body 0)
@@ -13,7 +13,7 @@ use crate::io_bridge::robot_brand::RobotBrand;
 /// double  tau_J[7]          (offset body 120)
 /// ...
 /// ```
-/// I comandi sono il `RobotCommand` (192 byte, modello ad addon da 32 byte):
+/// Commands use the `RobotCommand` (192 bytes, 32-byte addon model):
 /// ```text
 /// uint32 time_ms (LE)      [0..4)
 /// uint16 reserved          [4..6)
@@ -24,8 +24,8 @@ use crate::io_bridge::robot_brand::RobotBrand;
 /// float32 q[7]             [22..50) (posizioni target giunti, LE)
 /// padding a zero           [50..192)
 /// ```
-/// NB: gli offset del comando vanno validati contro il manuale FCI durante
-/// il primo bring-up su Panda reale; il codec è il punto unico di modifica.
+/// NB: the command offsets must be validated against the FCI manual during
+/// first bring-up on a real Panda; the codec is the single point of change.
 pub struct FrankaFci;
 
 const FCI_JOINTS: usize = 7;

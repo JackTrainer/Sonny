@@ -1,28 +1,28 @@
-/// Profili di compatibilità dei principali marchi di robot industriali.
+/// Compatibility profiles of the main industrial robot brands.
 ///
-/// SONNY è "agnostico per costruzione": il campo `manufacturer` (o il campo
-/// opzionale `brand`) del file JSON HAL determina il profilo di compatibilità
-/// del robot. Ogni marchio espone il proprio codec nativo tramite il modulo
-/// `adapters`, senza modificare il nucleo del microkernel.
+/// SONNY is "agnostic by construction": the `manufacturer` field (or the
+/// optional `brand` field) of the HAL JSON file determines the robot's
+/// compatibility profile. Each brand exposes its own native codec through the
+/// `adapters` module, without touching the microkernel core.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RobotBrand {
-    /// Profilo generico a frame binario f32 LE (nessun adattatore specifico).
+    /// Generic profile with f32 LE binary frames (no specific adapter).
     #[default]
     Generic,
-    /// KUKA — controllori KRC4/KRC5 via Ethernet KRL (XML su TCP, porta 7911).
+    /// KUKA — KRC4/KRC5 controllers over Ethernet KRL (XML on TCP, port 7911).
     Kuka,
-    /// Comau — controllori C5G/C6G via bridge socket PDL2 (testo su TCP).
+    /// Comau — C5G/C6G controllers over PDL2 socket bridge (text on TCP).
     Comau,
-    /// Universal Robots — Real-Time Client (porta 30003) + URScript (30002).
+    /// Universal Robots — Real-Time Client (port 30003) + URScript (30002).
     UniversalRobots,
-    /// Franka Emika — Panda via FCI (Franka Control Interface, UDP 30401).
+    /// Franka Emika — Panda over FCI (Franka Control Interface, UDP 30401).
     FrankaEmika,
-    /// Piattaforme AMR standard — mapping twist/odometry stile ROS2.
+    /// Standard AMR platforms — twist/odometry mapping in ROS2 style.
     Amr,
 }
 
 impl RobotBrand {
-    /// Riconosce il marchio da una stringa libera (`manufacturer` o `brand`).
+    /// Recognizes the brand from a free-form string (`manufacturer` or `brand`).
     pub fn from_manufacturer(manufacturer: &str) -> RobotBrand {
         let s = manufacturer.to_ascii_lowercase();
         if s.contains("kuka") {
@@ -40,7 +40,7 @@ impl RobotBrand {
         }
     }
 
-    /// Etichetta leggibile per log e interfaccia.
+    /// Readable label for logs and UI.
     pub fn label(&self) -> &'static str {
         match self {
             RobotBrand::Generic => "GENERIC",
@@ -52,7 +52,7 @@ impl RobotBrand {
         }
     }
 
-    /// DOF nativi del marchio (usati come fallback quando la config non li dà).
+    /// Native DOF of the brand (used as a fallback when the config does not provide it).
     pub fn native_dof(&self) -> usize {
         match self {
             RobotBrand::FrankaEmika => 7,
@@ -64,7 +64,7 @@ impl RobotBrand {
         }
     }
 
-    /// Protocollo nativo usato dal codec dell'adattatore.
+    /// Native protocol used by the adapter codec.
     pub fn native_protocol(&self) -> &'static str {
         match self {
             RobotBrand::Generic => "Fixed-f32-LE",
@@ -76,7 +76,7 @@ impl RobotBrand {
         }
     }
 
-    /// Trasporto suggerito dal marchio (per la config fieldbus predefinita).
+    /// Transport suggested by the brand (for the default fieldbus config).
     pub fn default_transport(&self) -> &'static str {
         match self {
             RobotBrand::FrankaEmika => "Udp",

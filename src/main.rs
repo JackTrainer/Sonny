@@ -17,23 +17,23 @@ use SONNY::system;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    println!("=== AVVIO NUCLEO - SONNY ===");
+    println!("=== SONNY CORE START ===");
 
-    // Il ciclo di controllo vive interamente su questo thread: lo si isola su
-    // un core dedicato con priorità real-time prima di avviare qualunque task.
+    // The control loop lives entirely on this thread: isolate it on a
+    // dedicated core with real-time priority before starting any task.
     system::rt_thread::pin_critical_thread(0);
 
     let config_path =
-        env::var("ROBOT_CONFIG_PATH").or_else(|_| env::args().nth(1).ok_or("Nessun argomento"));
+        env::var("ROBOT_CONFIG_PATH").or_else(|_| env::args().nth(1).ok_or("No argument"));
 
     // ------------------------------------------------------------------
-    // 1. BOOT: configurazione hardware (file JSON o modalità mock)
+    // 1. BOOT: hardware configuration (JSON file or mock mode)
     // ------------------------------------------------------------------
     let (config, robot_name, expected_hz, max_jitter_us, dof) = match config_path {
         Ok(path) => {
             let config = io_bridge::hal_loader::HalLoader::from_file(&path)?;
             println!(
-                "[BOOT] Config caricata: {} ({} DOF) di {}, profilo compatibilità: {}",
+                "[BOOT] Config loaded: {} ({} DOF) by {}, compatibility profile: {}",
                 config.robot_name,
                 config.dof,
                 config.manufacturer,
@@ -41,12 +41,12 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             );
             for joint in &config.joints {
                 println!(
-                    "  -> Giunto {}: [{:.2}, {:.2}] rad, home {:.2}",
+                    "  -> Joint {}: [{:.2}, {:.2}] rad, home {:.2}",
                     joint.name, joint.min_angle_rad, joint.max_angle_rad, joint.home_angle_rad
                 );
             }
             println!(
-                "[BOOT] Frequenza attesa: {} Hz, jitter max: {} us",
+                "[BOOT] Expected frequency: {} Hz, max jitter: {} us",
                 config.expected_hz, config.max_jitter_us
             );
             (
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             )
         }
         Err(_) => {
-            println!("[BOOT] Nessuna configurazione fornita. Avvio modalità mock.");
+            println!("[BOOT] No configuration provided. Starting mock mode.");
             (None, "MockRobot".into(), 100.0, 1000, 6)
         }
     };
@@ -79,20 +79,20 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         .unwrap_or_default();
 
     let zenoh_session = Arc::new(zenoh::open(zenoh::Config::default()).await?);
-    println!("[BOOT] Bus Zenoh agganciato correttamente.");
+    println!("[BOOT] Zenoh bus attached successfully.");
 
-    // Canale di comunicazione tra il runtime WASM (Core 2) e il loop di
-    // controllo (Core 1): buffer circolare lock-free a capacità 1. Il Core 1
-    // legge senza mai attendere WASM; se lo slot è vuoto riusa l'ultimo
-    // vettore valido e il ciclo a 100 Hz non salta mai.
+    // Communication channel between the WASM runtime (Core 2) and the control
+    // loop (Core 1): lock-free circular buffer with capacity 1. Core 1 reads
+    // without ever waiting on WASM; if the slot is empty it reuses the last
+    // valid vector and the 100 Hz loop never skips.
     let command_buffer = Arc::new(LatestCommand::new());
 
-    // Heartbeat unico condiviso tra loop di controllo e Hard-Watchdog: è il
-    // Core 1 a batterlo a ogni frame, il watchdog sorveglia solo l'età.
+    // Single heartbeat shared between the control loop and the Hard-Watchdog:
+    // Core 1 beats it every frame, the watchdog only watches its age.
     let control_heartbeat = Arc::new(Heartbeat::new());
 
     // ------------------------------------------------------------------
-    // 2. Configurazione fieldbus: file JSON > variabili d'ambiente
+    // 2. Fieldbus configuration: JSON file > environment variables
     // ------------------------------------------------------------------
     let fieldbus_config = resolve_fieldbus(&config).await?;
 
@@ -142,10 +142,10 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     });
 
     // ------------------------------------------------------------------
-    // Hard-Watchdog: thread ad altissima priorità che sorveglia il cuore
-    // del controllo. Se il modulo di controllo non batte l'heartbeat ogni
-    // 10 ms, azzera gli azionamenti e aggancia l'estop, scavalcando
-    // qualunque Skill WASM bloccata.
+    // Hard-Watchdog: very high priority thread that guards the control
+    // heart. If the control module does not beat the heartbeat every 10 ms,
+    // it zeroes the drives and latches the estop, bypassing any blocked
+    // WASM Skill.
     // ------------------------------------------------------------------
     let session_for_wd = zenoh_session.clone();
     let name_for_wd = robot_name.clone();
@@ -163,24 +163,24 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             return;
         }
         println!(
-            "[BOOT] Hard-Watchdog armato su {} (timeout heartbeat {} ms).",
+            "[BOOT] Hard-Watchdog armed on {} (heartbeat timeout {} ms).",
             name_for_wd,
             WatchdogConfig::default().heartbeat_timeout_ms
         );
 
-        // Il battito lo genera il loop di controllo a 100 Hz sul Core 1: se
-        // quel thread muore o si blocca, il watchdog scatta. Il task qui si
-        // limita a mantenere vivo il monitor del watchdog (nessun pinger di
-        // ripiego: il cuore vero batte solo dal Core 1).
+        // The beat is generated by the 100 Hz control loop on Core 1: if that
+        // thread dies or stalls, the watchdog trips. The task here only keeps
+        // the watchdog monitor alive (no fallback pinger: the real heart only
+        // beats from Core 1).
         loop {
             tokio::time::sleep(Duration::from_secs(3600)).await;
         }
     });
 
     // ------------------------------------------------------------------
-    // Loop di controllo real-time a 100 Hz (Core 1): legge dal buffer
-    // lock-free senza attendere WASM, sanifica il vettore, batte
-    // l'heartbeat e pubblica il comando verso l'HAL.
+    // 100 Hz real-time control loop (Core 1): reads from the lock-free
+    // buffer without waiting on WASM, sanitizes the vector, beats the
+    // heartbeat and publishes the command to the HAL.
     // ------------------------------------------------------------------
     let session_for_rt = zenoh_session.clone();
     let name_for_rt = robot_name.clone();
@@ -199,8 +199,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             max_jitter_us,
         );
         match rt_loop.start() {
-            Ok(_) => println!("[BOOT] Loop di controllo 100 Hz avviato sul Core 1."),
-            Err(e) => eprintln!("[ERROR] Loop real-time 100 Hz: {:?}", e),
+            Ok(_) => println!("[BOOT] 100 Hz control loop started on Core 1."),
+            Err(e) => eprintln!("[ERROR] Real-time 100 Hz loop: {:?}", e),
         }
     });
 
@@ -220,27 +220,27 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         .map(|c| c.resolved_brand().label())
         .unwrap_or("GENERIC");
     println!(
-        "[BOOT] Sistema pronto su hardware: {} (profilo: {})",
+        "[BOOT] System ready on hardware: {} (profile: {})",
         robot_name, brand_label
     );
     tokio::signal::ctrl_c().await?;
-    println!("=== SPEGNIMENTO ===");
+    println!("=== SHUTDOWN ===");
     Ok(())
 }
 
-/// Risolve il fieldbus reale: prima dal file di config, poi dalle variabili
-/// d'ambiente, infine nessuno (mock simulato puro).
+/// Resolves the actual fieldbus: first from the config file, then from
+/// environment variables, finally none (pure simulated mock).
 async fn resolve_fieldbus(
     config: &Option<HardwareConfig>,
 ) -> Result<Option<FieldbusConfig>, Box<dyn Error + Send + Sync>> {
     if let Some(config) = config {
         match config.to_fieldbus_config() {
             Ok(Some(cfg)) => {
-                println!("[BOOT] Fieldbus dal file di config: {:?}", cfg.transport);
+                println!("[BOOT] Fieldbus from config file: {:?}", cfg.transport);
                 return Ok(Some(cfg));
             }
             Ok(None) => {}
-            Err(e) => eprintln!("[BOOT] Config fieldbus ignorata: {}", e),
+            Err(e) => eprintln!("[BOOT] Fieldbus config ignored: {}", e),
         }
     }
 
@@ -302,13 +302,13 @@ async fn resolve_fieldbus(
                 .map(|c| c.resolved_brand())
                 .unwrap_or(RobotBrand::Generic),
         };
-        println!("[BOOT] Fieldbus seriale configurato da ambiente.");
+        println!("[BOOT] Serial fieldbus configured from environment.");
         return Ok(Some(fieldbus));
     }
 
     if let Ok(bind) = env::var("ROBOT_UDP_BIND") {
         let remote =
-            env::var("ROBOT_UDP_REMOTE").expect("ROBOT_UDP_REMOTE necessario con ROBOT_UDP_BIND");
+            env::var("ROBOT_UDP_REMOTE").expect("ROBOT_UDP_REMOTE required with ROBOT_UDP_BIND");
         let hardware_id = config
             .as_ref()
             .map(|c| c.robot_name.clone())
@@ -333,10 +333,10 @@ async fn resolve_fieldbus(
                 .map(|c| c.resolved_brand())
                 .unwrap_or(RobotBrand::Generic),
         };
-        println!("[BOOT] Fieldbus UDP configurato da ambiente.");
+        println!("[BOOT] UDP fieldbus configured from environment.");
         return Ok(Some(fieldbus));
     }
 
-    println!("[BOOT] Nessun fieldbus configurato. Uso mock simulato.");
+    println!("[BOOT] No fieldbus configured. Using simulated mock.");
     Ok(None)
 }

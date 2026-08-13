@@ -14,7 +14,7 @@ pub async fn listen_for_skills(
     while let Ok(sample) = subscriber.recv_async().await {
         let wasm_bytecode = sample.payload().to_bytes().to_vec();
         println!(
-            "[REGISTRY] Ricevuto nuovo pacchetto binario .skill di {} byte.",
+            "[REGISTRY] Received new .skill binary package of {} bytes.",
             wasm_bytecode.len()
         );
         execute_skill_sandbox(&wasm_bytecode, output.clone());
@@ -22,12 +22,12 @@ pub async fn listen_for_skills(
     Ok(())
 }
 
-/// Esegue la Skill in un sandbox dedicato e ne pubblica il risultato nel
-/// buffer lock-free a capacità 1.
+/// Runs the Skill in a dedicated sandbox and publishes its result into the
+/// capacity-1 lock-free buffer.
 ///
-/// Il runtime Wasmtime vive sul Core 2, isolato dal loop di controllo che
-/// gira sul Core 1: anche se una Skill impiega centinaia di microsecondi, il
-/// Core 1 non lo aspetta mai e riusa l'ultimo vettore di coordinate valido.
+/// The Wasmtime runtime lives on Core 2, isolated from the control loop
+/// running on Core 1: even if a Skill takes hundreds of microseconds, Core 1
+/// never waits for it and reuses the last valid coordinate vector.
 fn execute_skill_sandbox(bytecode: &[u8], output: Arc<LatestCommand>) {
     let bytecode = bytecode.to_vec();
     std::thread::Builder::new()
@@ -35,40 +35,40 @@ fn execute_skill_sandbox(bytecode: &[u8], output: Arc<LatestCommand>) {
         .spawn(move || {
             if core_affinity::set_for_current(core_affinity::CoreId { id: WASM_RUNTIME_CORE }) {
                 println!(
-                    "[SANDBOX] Runtime WASM pinnato sul Core {}.",
+                    "[SANDBOX] WASM runtime pinned to Core {}.",
                     WASM_RUNTIME_CORE
                 );
             } else {
                 eprintln!(
-                    "[WARN - SANDBOX] Pinning del runtime WASM sul Core {} non riuscito.",
+                    "[WARN - SANDBOX] Failed to pin WASM runtime to Core {}.",
                     WASM_RUNTIME_CORE
                 );
             }
 
-            println!("[SANDBOX] Inizializzazione ambiente virtuale isolato (WASM)...");
+            println!("[SANDBOX] Initializing isolated virtual environment (WASM)...");
 
-            // NOTA PER LA COMMUNITY: Questa è l'interfaccia cieca di isolamento.
-            // La ricompensa a tre stati (-1.0, 0.0, 1.0) viene valutata qui dentro
-            // preservando la sicurezza hardware e la protezione del codice aziendale.
+            // NOTE TO THE COMMUNITY: This is the blind isolation interface.
+            // The three-state reward (-1.0, 0.0, 1.0) is evaluated here,
+            // preserving hardware safety and corporate code protection.
 
             let reward = evaluate_reward(&bytecode);
 
-            // Il sandbox produce coordinate geometriche: il Core 1 le legge dal
-            // buffer senza mai bloccarsi, oppure riusa l'ultimo valore valido.
+            // The sandbox produces geometric coordinates: Core 1 reads them from
+            // the buffer without ever blocking, or reuses the last valid value.
             let cmd = CommandVector::from_slice(&[reward, -reward, reward * 0.5]);
             output.publish(cmd);
 
             println!(
-                "[SANDBOX] Esecuzione logica di ricompensa completata (ricompensa {}). Comando pubblicato sul buffer lock-free.",
+                "[SANDBOX] Reward logic execution completed (reward {}). Command published on the lock-free buffer.",
                 reward
             );
         })
-        .expect("spawn del thread del runtime WASM");
+        .expect("spawn of the WASM runtime thread");
 }
 
-/// Valutazione della ricompensa della Skill: qui entrerà il motore Wasmtime
-/// vero e proprio. Il mock restituisce una ricompensa deterministica a tre
-/// stati in funzione del bytecode, senza mai eseguire codice arbitrario.
+/// Skill reward evaluation: the actual Wasmtime engine will be plugged in
+/// here. The mock returns a deterministic three-state reward based on the
+/// bytecode, without ever executing arbitrary code.
 fn evaluate_reward(bytecode: &[u8]) -> f32 {
     match bytecode.len() % 3 {
         0 => 0.0,

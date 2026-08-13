@@ -1,23 +1,23 @@
-/// Dimensione massima fissa dei vettori di stato e di comando.
+/// Fixed maximum size of the state and command vectors.
 ///
-/// 32 giunti coprono con abbondanza qualunque robot (bracci, AMR, droni,
-/// umanoidi) e garantiscono che `StateVector`/`CommandVector` siano array
-/// statici pre-allocati: nessun `malloc` durante il loop di controllo a
-/// 100 Hz, quindi zero frammentazione dell'heap.
+/// 32 joints comfortably cover any robot (arms, AMRs, drones,
+/// humanoids) and ensure that `StateVector`/`CommandVector` are static
+/// pre-allocated arrays: no `malloc` during the control loop at
+/// 100 Hz, hence zero heap fragmentation.
 pub const MAX_JOINTS: usize = 32;
 
-/// Rappresentazione matematica standardizzata dei comandi diretti ai motori.
+/// Standardized mathematical representation of the commands sent to the motors.
 ///
-/// Vettore a dimensione **fissa** `[f32; 32]` + lunghezza attiva `len`: la RAM
-/// occupata è identica dal primo secondo fino a 10 anni di utilizzo continuo.
+/// Fixed-size **vector** `[f32; 32]` + active length `len`: the RAM
+/// occupied is identical from the first second to 10 years of continuous use.
 #[derive(Debug, Clone, Copy)]
 pub struct CommandVector {
-    pub target_actuators: [f32; MAX_JOINTS], // Voltaggi o coppie per i giunti
+    pub target_actuators: [f32; MAX_JOINTS], // Voltages or torques for the joints
     pub len: usize,
 }
 
 impl CommandVector {
-    /// Vettore vuoto, tutto a zero. Nessuna allocazione.
+    /// Empty vector, all zeros. No allocation.
     pub const fn new() -> Self {
         Self {
             target_actuators: [0.0; MAX_JOINTS],
@@ -25,7 +25,7 @@ impl CommandVector {
         }
     }
 
-    /// Vettore di zeri lungo `joint_count`: usato da estop e Hard-Watchdog.
+    /// Zero vector of length `joint_count`: used by estop and Hard-Watchdog.
     pub fn zeros(joint_count: usize) -> Self {
         Self {
             target_actuators: [0.0; MAX_JOINTS],
@@ -33,7 +33,7 @@ impl CommandVector {
         }
     }
 
-    /// Copia `values` nell'array statico (troncato a `MAX_JOINTS`).
+    /// Copies `values` into the static array (truncated to `MAX_JOINTS`).
     pub fn from_slice(values: &[f32]) -> Self {
         let mut v = Self::new();
         let n = values.len().min(MAX_JOINTS);
@@ -42,7 +42,7 @@ impl CommandVector {
         v
     }
 
-    /// Converte i byte estratti da Zenoh nuovamente in comandi f32 per il robot.
+    /// Converts the bytes retrieved from Zenoh back into f32 commands for the robot.
     pub fn from_bytes(bytes: &[u8]) -> Self {
         let mut v = Self::new();
         let mut n = 0;
@@ -65,10 +65,10 @@ impl CommandVector {
         &mut self.target_actuators[..self.len]
     }
 
-    /// Serializzazione binaria compatta **senza allocazione**: scrive i valori
-    /// f32 LE in `out` e restituisce i byte scritti. Stesso formato usato dagli
-    /// `StateVector`: un unico parser lato microcontrollore per telemetria e
-    /// comandi. `out` deve avere capacità `MAX_JOINTS * 4` (128 byte).
+    /// Compact binary serialization **without allocation**: writes the f32 LE
+    /// values into `out` and returns the bytes written. Same format used by
+    /// `StateVector`: a single parser on the microcontroller side for telemetry
+    /// and commands. `out` must have capacity `MAX_JOINTS * 4` (128 bytes).
     pub fn write_to(&self, out: &mut [u8]) -> usize {
         let n = self.len.min(out.len() / 4);
         let mut written = 0;

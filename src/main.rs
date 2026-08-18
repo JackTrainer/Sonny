@@ -15,7 +15,7 @@ use SONNY::registry;
 use SONNY::ros2_bridge;
 use SONNY::system;
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "multi_thread", worker_threads = 1)]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     println!("=== SONNY CORE START ===");
 

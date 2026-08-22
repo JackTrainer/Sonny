@@ -38,6 +38,10 @@ impl VectorSanitizer {
     /// Values that pass both checks become the new safe reference
     /// point for the following ticks.
     pub fn sanitize_and_clamp(&mut self, command: &mut CommandVector, limits: &[(f32, f32)]) {
+        // CPU-level sampling of the cycle: two clock reads (~20 ns total),
+        // one relaxed atomic store per metric. No allocation, no lock:
+        // the real-time budget on Core 1 is untouched.
+        let t0 = std::time::Instant::now();
         let n = command.len.min(MAX_JOINTS);
         for i in 0..n {
             let mut v = command.target_actuators[i];
@@ -60,6 +64,11 @@ impl VectorSanitizer {
             command.target_actuators[i] = v;
             self.last_safe[i] = v;
         }
+
+        crate::diagnostics::atomic_health::HEALTH
+            .sanitizer_cycle
+            .0
+            .record(t0.elapsed().as_nanos() as u64);
     }
 }
 

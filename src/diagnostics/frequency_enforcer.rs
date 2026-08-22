@@ -75,6 +75,10 @@ impl FrequencyEnforcer {
         let mut last_timestamp: Option<Instant> = None;
 
         while let Ok(_sample) = subscriber.recv_async().await {
+            crate::diagnostics::atomic_health::HEALTH
+                .zenoh_rx_frames
+                .0
+                .fetch_add(1, Ordering::Relaxed);
             let now = Instant::now();
 
             if let Some(last) = last_timestamp {
@@ -307,18 +311,35 @@ impl RealTimeControlLoop {
             self.sanitizer.sanitize_and_clamp(&mut cmd, &self.limits);
             last_valid = cmd;
 
-            // 3. Heartbeat: the watchdog never sees a missing frame.
+            // 3. Heartbeat: the watchdog never sees a missing frame. The
+            //    same beat feeds the lock-free health probe (Core 1 alive).
             self.heartbeat.ping();
+            crate::diagnostics::atomic_health::HEALTH.rt_thread_beat.0.ping();
 
-            // 4. Publication of the command to the HAL.
+            // 4. Publication of the command to the HAL, with the network
+            //    round-trip sampled into the health probe.
             let mut buf = [0u8; MAX_JOINTS * 4];
             let n = cmd.write_to(&mut buf);
+            let tx_t0 = Instant::now();
             if let Err(e) = self.session.put(&cmd_topic, buf[..n].to_vec()).await {
                 eprintln!("[RT] Sending command to {}: {}", cmd_topic, e);
+                crate::diagnostics::atomic_health::HEALTH
+                    .zenoh_tx_errors
+                    .0
+                    .fetch_add(1, Ordering::Relaxed);
             }
+            crate::diagnostics::atomic_health::HEALTH
+                .zenoh_tx_latency
+                .0
+                .record(tx_t0.elapsed().as_nanos() as u64);
 
-            // 5. Frame jitter against the theoretical period.
+            // 5. Frame jitter against the theoretical period + full-frame
+            //    duration recorded for the CLI health line.
             let elapsed_us = t0.elapsed().as_micros() as u64;
+            crate::diagnostics::atomic_health::HEALTH
+                .rt_frame
+                .0
+                .record(t0.elapsed().as_nanos() as u64);
             if let Some(report) = self.enforcer.analyze_interval(elapsed_us) {
                 eprintln!(
                     "[WARN - RT] Frame out of window: expected {} us, measured {} us (deviation {}%)",

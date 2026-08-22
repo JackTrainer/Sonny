@@ -215,6 +215,31 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         ui.start_render_loop().await;
     });
 
+    // ------------------------------------------------------------------
+    // Instantaneous CLI health probe: type "health" + Enter and get a
+    // single lock-free line with network and compute latency. No external
+    // monitoring software needed.
+    // ------------------------------------------------------------------
+    tokio::spawn(async move {
+        let mut stdin = tokio::io::BufReader::new(tokio::io::stdin());
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if tokio::io::AsyncBufReadExt::read_line(&mut stdin, &mut line)
+                .await
+                .unwrap_or(0)
+                == 0
+            {
+                return;
+            }
+            if line.trim() == "health" {
+                let mut report = String::with_capacity(256);
+                diagnostics::atomic_health::HEALTH.render_line(&mut report);
+                println!("{}", report);
+            }
+        }
+    });
+
     let brand_label = config
         .as_ref()
         .map(|c| c.resolved_brand().label())

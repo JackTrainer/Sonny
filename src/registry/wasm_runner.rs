@@ -51,7 +51,14 @@ fn execute_skill_sandbox(bytecode: &[u8], output: Arc<LatestCommand>) {
             // The three-state reward (-1.0, 0.0, 1.0) is evaluated here,
             // preserving hardware safety and corporate code protection.
 
+            let t0 = std::time::Instant::now();
             let reward = evaluate_reward(&bytecode);
+
+            // Core 2 health: cycle duration + thread liveness stamp, both
+            // written with relaxed atomic stores (no lock, no allocation).
+            let health = &crate::diagnostics::atomic_health::HEALTH;
+            health.wasm_cycle.0.record(t0.elapsed().as_nanos() as u64);
+            health.wasm_thread_beat.0.ping();
 
             // The sandbox produces geometric coordinates: Core 1 reads them from
             // the buffer without ever blocking, or reuses the last valid value.

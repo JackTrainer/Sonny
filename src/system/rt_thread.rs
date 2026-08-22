@@ -8,11 +8,11 @@
 ///
 /// This module reduces the risk in two steps:
 ///
-/// 1. **Affinity** — the thread is pinned to a dedicated/isolated core:
+/// 1. Affinity: the thread is pinned to a dedicated/isolated core:
 ///    context switches to other cores disappear and the data cache stays
 ///    warm. Core 0 is typically reserved for the kernel, so the default
 ///    choice falls on the first available logical core.
-/// 2. **Priority** — the thread is promoted to SCHED_FIFO (real-time, not
+/// 2. Priority: the thread is promoted to SCHED_FIFO (real-time, not
 ///    preemptible by normal-priority processes). If the permissions are
 ///    missing (requires CAP_SYS_NICE or RLIMIT_RTPRIO), it falls back to
 ///    niceness -20.

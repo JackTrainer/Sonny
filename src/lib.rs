@@ -1,3 +1,4 @@
+pub mod chaos;
 pub mod diagnostics;
 pub mod io_bridge;
 pub mod math_utils;

@@ -236,4 +236,4 @@ ZENOH_CONFIG=zenoh/router.json ./target/release/SONNY configs/universal_robots_u
 **Please Note:** This repository is strictly the **Core Minimal Shell** of SONNY OS. It provides the essential communication tubes, telemetry data serialization, and sandbox runtimes. It **does not** contain the proprietary cloud compiler, the structural causal engine, or the advanced multi-scale swarm synchronization.
 
 * **Open-Source Contribution:** We welcome global contributions to expand the HAL JSON drivers for specific robot models. This core is licensed under the **GNU Affero General Public License v3 (AGPLv3)**. Any commercial use or modifications of this infrastructure must remain public and open-source under the same terms.
-* **Enterprise Beta:** To unlock the full Causal Engine, the 3-minute local "Dreaming" optimization loops, and 24/7 mission-critical production SLAs for 3PL and fulfillment centers without open-source copyleft restrictions, visit our official platform - https://alpha-robotics.it/
+

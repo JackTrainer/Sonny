@@ -17,6 +17,9 @@ pub enum RobotBrand {
     UniversalRobots,
     /// Franka Emika — Panda over FCI (Franka Control Interface, UDP 30401).
     FrankaEmika,
+    /// Luwu Dynamics — XGO quadrupeds (XGO-Lite 2, XGO-Mini) over the
+    /// register-oriented UART protocol (115200 8N1, 0x55 frames).
+    LuwuDynamics,
     /// Standard AMR platforms — twist/odometry mapping in ROS2 style.
     Amr,
 }
@@ -31,6 +34,8 @@ impl RobotBrand {
             RobotBrand::Comau
         } else if s.contains("franka") || s.contains("emika") || s.contains("panda") {
             RobotBrand::FrankaEmika
+        } else if s.contains("luwu") || s.contains("xgo") {
+            RobotBrand::LuwuDynamics
         } else if s.contains("universal") || s.contains("ur") {
             RobotBrand::UniversalRobots
         } else if s.contains("amr") || s.contains("agv") || s.contains("mobile") {
@@ -48,6 +53,7 @@ impl RobotBrand {
             RobotBrand::Comau => "COMAU",
             RobotBrand::UniversalRobots => "UNIVERSAL-ROBOTS",
             RobotBrand::FrankaEmika => "FRANKA-EMIKA",
+            RobotBrand::LuwuDynamics => "LUWU-DYNAMICS",
             RobotBrand::Amr => "AMR",
         }
     }
@@ -56,6 +62,7 @@ impl RobotBrand {
     pub fn native_dof(&self) -> usize {
         match self {
             RobotBrand::FrankaEmika => 7,
+            RobotBrand::LuwuDynamics => 12,
             RobotBrand::Amr => 4,
             RobotBrand::Kuka
             | RobotBrand::Comau
@@ -72,6 +79,7 @@ impl RobotBrand {
             RobotBrand::Comau => "PDL2-Socket",
             RobotBrand::UniversalRobots => "UR-RTClient/URScript",
             RobotBrand::FrankaEmika => "FCI-UDP",
+            RobotBrand::LuwuDynamics => "XGO-Register-UART",
             RobotBrand::Amr => "ROS2-Twist/Odom",
         }
     }
@@ -81,7 +89,7 @@ impl RobotBrand {
         match self {
             RobotBrand::FrankaEmika => "Udp",
             RobotBrand::Kuka | RobotBrand::Comau | RobotBrand::UniversalRobots => "Tcp",
-            RobotBrand::Generic | RobotBrand::Amr => "Serial",
+            RobotBrand::LuwuDynamics | RobotBrand::Generic | RobotBrand::Amr => "Serial",
         }
     }
 }
@@ -110,6 +118,14 @@ mod tests {
             RobotBrand::FrankaEmika
         );
         assert_eq!(
+            RobotBrand::from_manufacturer("Luwu Dynamics"),
+            RobotBrand::LuwuDynamics
+        );
+        assert_eq!(
+            RobotBrand::from_manufacturer("XGO-Lite 2"),
+            RobotBrand::LuwuDynamics
+        );
+        assert_eq!(
             RobotBrand::from_manufacturer("AMR platform"),
             RobotBrand::Amr
         );
@@ -123,6 +139,7 @@ mod tests {
     fn native_dofs_are_sensible() {
         assert_eq!(RobotBrand::FrankaEmika.native_dof(), 7);
         assert_eq!(RobotBrand::UniversalRobots.native_dof(), 6);
+        assert_eq!(RobotBrand::LuwuDynamics.native_dof(), 12);
         assert_eq!(RobotBrand::Amr.native_dof(), 4);
     }
 }

@@ -251,6 +251,7 @@ mod tests {
             ),
             ("configs/franka_emika_panda.json", RobotBrand::FrankaEmika),
             ("configs/amr_standard_base.json", RobotBrand::Amr),
+            ("configs/xgo_lite2_cm4.json", RobotBrand::LuwuDynamics),
             (
                 "configs/robot_6dof_anthropomorphic.json",
                 RobotBrand::Generic,

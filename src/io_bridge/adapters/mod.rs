@@ -16,6 +16,7 @@ pub mod franka_fci;
 pub mod generic_binary;
 pub mod kuka_eth_krl;
 pub mod universal_robots;
+pub mod xgo_uart;
 
 use crate::io_bridge::command_vector::{CommandVector, MAX_JOINTS};
 use crate::io_bridge::robot_brand::RobotBrand;
@@ -29,6 +30,10 @@ pub enum FrameStrategy {
     LengthPrefixed { header_bytes: usize },
     /// Messages terminated by a trailing sequence (XML, text, JSON).
     Delimited { terminator: &'static [u8] },
+    /// Register-framed protocol: fixed header, total-length byte, register
+    /// address and fixed tail (Luwu Dynamics XGO:
+    /// `0x55 0x00 LEN MODE ADDR data… CHK 0x00 0xAA`).
+    RegisterFramed { header: u8 },
 }
 
 impl FrameStrategy {
@@ -37,6 +42,7 @@ impl FrameStrategy {
             FrameStrategy::Fixed { .. } => "FIXED",
             FrameStrategy::LengthPrefixed { .. } => "LENGTH-PREFIXED",
             FrameStrategy::Delimited { .. } => "DELIMITED",
+            FrameStrategy::RegisterFramed { .. } => "REGISTER-FRAMED",
         }
     }
 }
@@ -71,6 +77,20 @@ pub trait BrandAdapter: Send + Sync {
         self.encode_command(&zeros, out)
     }
 
+    /// Optional active telemetry poll: writes the brand-native read request
+    /// for the NEXT telemetry register into `out` and returns the bytes
+    /// written. Return 0 when the controller streams telemetry on its own
+    /// (default): only polled protocols need to implement this.
+    fn poll_request(&self, _out: &mut [u8]) -> usize {
+        0
+    }
+
+    /// Minimum spacing between poll requests, in milliseconds. 0 (default)
+    /// disables active polling in the fieldbus loops.
+    fn poll_period_ms(&self) -> u64 {
+        0
+    }
+
     /// Suggested pre-allocation size for the receive buffer.
     fn buffer_hint(&self) -> usize {
         1024
@@ -85,6 +105,7 @@ pub fn adapter_for(brand: RobotBrand) -> Box<dyn BrandAdapter> {
         RobotBrand::UniversalRobots => Box::new(universal_robots::UniversalRobots),
         RobotBrand::FrankaEmika => Box::new(franka_fci::FrankaFci),
         RobotBrand::Amr => Box::new(amr_ros2::AmrRos2),
+        RobotBrand::LuwuDynamics => Box::new(xgo_uart::XgoUart::new()),
         RobotBrand::Generic => Box::new(generic_binary::GenericBinary),
     }
 }

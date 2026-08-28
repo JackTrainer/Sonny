@@ -1,0 +1,43 @@
+{
+  "robot_name": "XGO-Lite-2-CM4",
+  "manufacturer": "Luwu Dynamics",
+  "brand": "XGO",
+  "dof": 12,
+  "expected_hz": 50.0,
+  "max_jitter_us": 2000,
+  "joints": [
+    { "name": "left_front_knee",   "min_angle_rad": -1.22173, "max_angle_rad": 0.87266,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "left_front_thigh",  "min_angle_rad": -1.22173, "max_angle_rad": 1.57080,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "left_front_hip",    "min_angle_rad": -0.52360, "max_angle_rad": 0.52360,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "right_front_knee",  "min_angle_rad": -1.22173, "max_angle_rad": 0.87266,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "right_front_thigh", "min_angle_rad": -1.22173, "max_angle_rad": 1.57080,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "right_front_hip",   "min_angle_rad": -0.52360, "max_angle_rad": 0.52360,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "right_hind_knee",   "min_angle_rad": -1.22173, "max_angle_rad": 0.87266,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "right_hind_thigh",  "min_angle_rad": -1.22173, "max_angle_rad": 1.57080,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "right_hind_hip",    "min_angle_rad": -0.52360, "max_angle_rad": 0.52360,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "left_hind_knee",    "min_angle_rad": -1.22173, "max_angle_rad": 0.87266,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "left_hind_thigh",   "min_angle_rad": -1.22173, "max_angle_rad": 1.57080,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 },
+    { "name": "left_hind_hip",     "min_angle_rad": -0.52360, "max_angle_rad": 0.52360,  "max_speed_rad_s": 4.0, "max_accel_rad_s2": 16.0, "max_jerk_rad_s3": 160.0, "home_angle_rad": 0.0, "gear_ratio": 1.0 }
+  ],
+  "fieldbus": {
+    "protocol": "Serial",
+    "port": "/dev/ttyAMA0",
+    "baud_rate": 115200,
+    "frame_timeout_ms": 100,
+    "reconnect_delay_ms": 2000
+  },
+  "kinematic_chain": [
+    { "parent": "base", "child": "left_front_hip",  "translation_m": [0.09, 0.055, 0.0],   "rotation_axis": [1.0, 0.0, 0.0] },
+    { "parent": "base", "child": "right_front_hip", "translation_m": [0.09, -0.055, 0.0],  "rotation_axis": [1.0, 0.0, 0.0] },
+    { "parent": "base", "child": "right_hind_hip",  "translation_m": [-0.09, -0.055, 0.0], "rotation_axis": [1.0, 0.0, 0.0] },
+    { "parent": "base", "child": "left_hind_hip",   "translation_m": [-0.09, 0.055, 0.0],  "rotation_axis": [1.0, 0.0, 0.0] },
+    { "parent": "left_front_hip",  "child": "left_front_thigh",  "translation_m": [0.0, 0.018, 0.0],  "rotation_axis": [0.0, 1.0, 0.0] },
+    { "parent": "right_front_hip", "child": "right_front_thigh", "translation_m": [0.0, -0.018, 0.0], "rotation_axis": [0.0, 1.0, 0.0] },
+    { "parent": "right_hind_hip",  "child": "right_hind_thigh",  "translation_m": [0.0, -0.018, 0.0], "rotation_axis": [0.0, 1.0, 0.0] },
+    { "parent": "left_hind_hip",   "child": "left_hind_thigh",   "translation_m": [0.0, 0.018, 0.0],  "rotation_axis": [0.0, 1.0, 0.0] },
+    { "parent": "left_front_thigh",  "child": "left_front_knee",  "translation_m": [0.0, 0.0, -0.055], "rotation_axis": [0.0, 1.0, 0.0] },
+    { "parent": "right_front_thigh", "child": "right_front_knee", "translation_m": [0.0, 0.0, -0.055], "rotation_axis": [0.0, 1.0, 0.0] },
+    { "parent": "right_hind_thigh",  "child": "right_hind_knee",  "translation_m": [0.0, 0.0, -0.055], "rotation_axis": [0.0, 1.0, 0.0] },
+    { "parent": "left_hind_thigh",   "child": "left_hind_knee",   "translation_m": [0.0, 0.0, -0.055], "rotation_axis": [0.0, 1.0, 0.0] }
+  ]
+}

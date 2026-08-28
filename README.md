@@ -51,7 +51,7 @@ Every robotics engineer knows the pain of maintaining a production-grade ROS 2 s
 SONNY OS reduces any mechanical complexity or joint geometry into a standardized linear mathematical vector (`Vec<f32>`). Hardware developers and engineers do not need to rewrite the core operating system or complex driver layers; integration is entirely **declarative** and achieved via a single, human-readable JSON configuration file (`OpenHalConfig`).
 
 1. **`io_bridge`**: Linearizes any joint inputs (radians, torques, pressures) into continuous array buffers and compresses commands to the actuators with only 5 bytes of network overhead.
-2. **`diagnostics`**: Includes an active `FrequencyEnforcer` and a real-time hard-watchdog loop that monitors sub-millisecond jitter to intercept timing delays before hardware collisions occur.
+2. **`diagnostics`**: Includes an active `FrequencyEnforcer` and a real-time hard-watchdog loop that monitors sub-millisecond jitter to intercept timing delays before hardware collisions occur. A lock-free `AtomicU64` health probe (`atomic_health.rs`) samples sanitizer/WASM/Zenoh timings with zero overhead: type `health` + Enter in the terminal for an instant latency line.
 3. **`registry`**: Provides a secure execution sandbox powered by **WebAssembly (WASM)**, isolating high-level skill policies from lower-level system critical registers.
 
 ---
@@ -66,10 +66,13 @@ SONNY OS is compatible out-of-the-box with the major industrial robot brands. Th
 | Comau | `COMAU` | PDL2 socket bridge (CSV over TCP) | `configs/comau_racer5.json` |
 | Universal Robots | `UNIVERSAL-ROBOTS` | RT Client (TCP 30003, binary) + URScript (30002) | `configs/universal_robots_ur5e.json` |
 | Franka Emika | `FRANKA-EMIKA` | FCI (UDP 30401, 1 kHz) | `configs/franka_emika_panda.json` |
+| Luwu Dynamics (XGO) | `LUWU-DYNAMICS` | XGO register UART (0x55 frames, 115200 8N1, active polling) | `configs/xgo_lite2_cm4.json` |
 | Standard AMR | `AMR` | ROS2 Twist/Odom mapping (differential) | `configs/amr_standard_base.json` |
 | Any other | `GENERIC` | Fixed f32 LE binary frame | `configs/robot_6dof_anthropomorphic.json` |
 
 Telemetry from the robot (whatever the brand) is normalized into the same fixed `[f32; 32]` state vector and published on `alpha/telemetry/{id}`; commands published on `alpha/cmd/{id}` are encoded into the brand-native protocol by the adapter. Safety (joint-limit clamping, ESTOP, hard watchdog) applies before encoding, in brand-independent vector space.
+
+On the **XGO-Lite 2** profile the command/state slots are: `0–11` leg joint targets in radians (register order per leg: knee, thigh, hip), `12–14` gait speeds (Vx/Vy in m/s, yaw rate in rad/s), `15` XGO action macro (1 = stand up, 255 = reset/stop). Telemetry fills the same slots with joint angles, roll/pitch/yaw (rad) and battery voltage (V): the STM32 controller never streams, so the HAL polls its registers at 50 Hz.
 
 ```bash
 cargo run --release -- configs/kuka_kr6_r900.json
@@ -91,12 +94,14 @@ SONNY/
 │   ├── franka_emika_panda.json
 │   ├── kuka_kr6_r900.json
 │   ├── robot_6dof_anthropomorphic.json
-│   └── universal_robots_ur5e.json
+│   ├── universal_robots_ur5e.json
+│   └── xgo_lite2_cm4.json          # Luwu Dynamics XGO-Lite 2 (CM4, UART 0x55)
 └── src/
     ├── main.rs                     # Async bootloader, RT thread pinning, fieldbus resolution
     ├── lib.rs                      # Crate root, public module exports
     ├── diagnostics/
     │   ├── mod.rs
+    │   ├── atomic_health.rs        # Lock-free AtomicU64 health probe + instant CLI line
     │   ├── frequency_enforcer.rs   # 100 Hz jitter monitor against control deadlines
     │   ├── telemetry_logger.rs     # Telemetry serialization on the fixed state vector
     │   └── terminal_ui.rs          # Live real-time terminal dashboard
@@ -109,7 +114,8 @@ SONNY/
     │   │   ├── franka_fci.rs       # FCI UDP 30401 (1 kHz)
     │   │   ├── generic_binary.rs   # Fixed f32 LE binary frame
     │   │   ├── kuka_eth_krl.rs     # Ethernet KRL (XML over TCP 7911)
-    │   │   └── universal_robots.rs # RT Client TCP 30003 + URScript 30002
+    │   │   ├── universal_robots.rs # RT Client TCP 30003 + URScript 30002
+    │   │   └── xgo_uart.rs         # XGO register UART (Luwu Dynamics quadrupeds)
     │   ├── command_vector.rs       # Fixed [f32; MAX_JOINTS] command buffer
     │   ├── hal_loader.rs           # OpenHalConfig JSON loader -> FieldbusConfig
     │   ├── hardware_abstraction.rs # Fieldbus loops (Serial/UDP/TCP) + clamp_command
@@ -161,7 +167,7 @@ Every robot profile lives in `configs/`. Open the JSON of your arm and set the `
 }
 ```
 
-The `brand` is auto-detected from `manufacturer` (or forced with `brand`) and selects the native codec: `KUKA` (Ethernet KRL / TCP 7911), `UNIVERSAL-ROBOTS` (RT Client / TCP 30003), `COMAU` (PDL2 / TCP 6000), `FRANKA-EMIKA` (FCI / UDP 30401), `AMR` (ROS2 Twist-Odom), `GENERIC` (fixed f32 binary).
+The `brand` is auto-detected from `manufacturer` (or forced with `brand`) and selects the native codec: `KUKA` (Ethernet KRL / TCP 7911), `UNIVERSAL-ROBOTS` (RT Client / TCP 30003), `COMAU` (PDL2 / TCP 6000), `FRANKA-EMIKA` (FCI / UDP 30401), `LUWU-DYNAMICS` (XGO register UART / serial), `AMR` (ROS2 Twist-Odom), `GENERIC` (fixed f32 binary).
 
 ### 2. Compile the Release Binary
 
@@ -213,6 +219,11 @@ ROBOT_SERIAL_BAUD=115200 \
 ROBOT_NAME=MyArm \
 ROBOT_DOF=6 \
 ./target/release/SONNY
+```
+
+**XGO-Lite 2 quadruped (Luwu Dynamics, Raspberry Pi CM4 onboard)** — run SONNY directly on the robot; the STM32 motion controller hangs off the CM4 primary UART (`/dev/ttyAMA0`, 115200 8N1). On a dev PC override the port with `ROBOT_SERIAL_PORT` (e.g. `COM5` on Windows):
+```bash
+./target/release/SONNY configs/xgo_lite2_cm4.json
 ```
 
 **UDP robot via environment** (bind address + robot endpoint):

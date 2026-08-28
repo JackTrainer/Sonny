@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpStream, UdpSocket};
-use tokio::time::sleep;
+use tokio::time::{interval, sleep};
 use tokio_serial::{SerialPortBuilderExt, SerialStream};
 
 /// Maximum buffer for encoding a command in the brand's native protocol
@@ -207,6 +207,13 @@ impl HardwareAbstraction {
             let mut buf = [0u8; 1024];
             let mut frames: u64 = 0;
 
+            // Active telemetry polling: protocols that never stream (e.g. the
+            // XGO register bus) declare a poll period; the loop then sends the
+            // adapter's rotating read requests at that pace.
+            let poll_period_ms = self.adapter.poll_period_ms();
+            let mut poll_tick = interval(Duration::from_millis(poll_period_ms.max(1)));
+            let mut poll_buf = [0u8; 64];
+
             self.publish_status(true, frames, estop_active).await?;
 
             loop {
@@ -262,6 +269,19 @@ impl HardwareAbstraction {
                                 }
                             }
                             Err(_) => break,
+                        }
+                    }
+                    _ = poll_tick.tick(), if poll_period_ms > 0 => {
+                        let n = self.adapter.poll_request(&mut poll_buf);
+                        if n > 0 {
+                            if let Err(e) = writer.write_all(&poll_buf[..n]).await {
+                                eprintln!("[HARDWARE] Serial poll send: {}", e);
+                                break;
+                            }
+                            if let Err(e) = writer.flush().await {
+                                eprintln!("[HARDWARE] Serial poll flush: {}", e);
+                                break;
+                            }
                         }
                     }
                 }
@@ -513,13 +533,17 @@ impl HardwareAbstraction {
             else {
                 break;
             };
-            state.set_values(&values[..n]);
-            let written = state.write_to(tx_buf);
-            if let Err(e) = self.session.put(telemetry_topic, &tx_buf[..written]).await {
-                eprintln!("[HARDWARE] Telemetry publication: {}", e);
+            // `n == 0` marks a resync (garbage flushed, no new telemetry): the
+            // bytes are consumed but nothing is published.
+            if n > 0 {
+                state.set_values(&values[..n]);
+                let written = state.write_to(tx_buf);
+                if let Err(e) = self.session.put(telemetry_topic, &tx_buf[..written]).await {
+                    eprintln!("[HARDWARE] Telemetry publication: {}", e);
+                }
+                *frames += 1;
             }
             acc.drain(..consumed);
-            *frames += 1;
         }
         Ok(())
     }
@@ -652,6 +676,10 @@ mod tests {
         assert_eq!(adapter_for(RobotBrand::Comau).brand(), RobotBrand::Comau);
         assert_eq!(adapter_for(RobotBrand::Amr).brand(), RobotBrand::Amr);
         assert_eq!(
+            adapter_for(RobotBrand::LuwuDynamics).brand(),
+            RobotBrand::LuwuDynamics
+        );
+        assert_eq!(
             adapter_for(RobotBrand::Generic).brand(),
             RobotBrand::Generic
         );
@@ -681,6 +709,10 @@ mod tests {
         assert_eq!(
             adapter_for(RobotBrand::Amr).frame_strategy(),
             FrameStrategy::Fixed { bytes_per_joint: 4 }
+        );
+        assert_eq!(
+            adapter_for(RobotBrand::LuwuDynamics).frame_strategy(),
+            FrameStrategy::RegisterFramed { header: 0x55 }
         );
     }
 }
